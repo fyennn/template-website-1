@@ -8,7 +8,7 @@ export type CategoryPageProps = {
 };
 
 const gridClassName =
-  "p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-24";
+  "p-4 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-24";
 
 export function CategoryPage({ categorySlug }: CategoryPageProps) {
   const products = PRODUCT_CATALOG[categorySlug] ?? [];

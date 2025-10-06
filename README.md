@@ -23,4 +23,3 @@ npm run dev       # start local dev server (default http://127.0.0.1:3000)
 - `frontend/lib/` – catalogue data and navigation helpers
 - `frontend/public/images/products/` – product imagery
 
-Feel free to delete the previous HTML assets in your local branches; they are no longer referenced.
