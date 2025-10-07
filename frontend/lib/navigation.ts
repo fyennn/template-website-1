@@ -8,19 +8,26 @@ export type NavigationItem = {
   href: string;
 };
 
-export const DEFAULT_CATEGORY: CategorySlug = "pistachio-series";
+export const DEFAULT_CATEGORY: CategorySlug = "all";
 
 export function categoryToPath(slug: CategorySlug): string {
   return slug === DEFAULT_CATEGORY ? "/" : `/${slug}`;
 }
 
 export const CATEGORY_ALIASES: Record<string, CategorySlug> = {
+  all: "all",
   matcha: "matcha-club",
   "master-soe": "master-soe-series",
   merch: "merchandise",
 };
 
 export const NAVIGATION: NavigationItem[] = [
+  {
+    slug: "all",
+    label: "All",
+    icon: "apps",
+    href: categoryToPath("all"),
+  },
   {
     slug: "pistachio-series",
     label: "Pistachio Series",

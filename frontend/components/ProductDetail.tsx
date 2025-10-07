@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatCurrency } from "@/lib/products";
 import type { CategorySlug, Product } from "@/lib/products";
 import type { CartOptionSelection } from "@/lib/cart";
@@ -153,11 +153,79 @@ type ProductDetailProps = {
 
 export function ProductDetail({ product, category }: ProductDetailProps) {
   const optionGroups = useMemo(() => buildOptionGroups(category), [category]);
-  const [selection, setSelection] = useState<SelectionState>(
-    createInitialState(optionGroups)
-  );
-  const [quantity, setQuantity] = useState(1);
-  const { addItem } = useCart();
+  const searchParams = useSearchParams();
+  const qtyParam = searchParams?.get("qty");
+  const initialQuantity = useMemo(() => {
+    if (!qtyParam) {
+      return 1;
+    }
+    const parsed = Number.parseInt(qtyParam, 10);
+    return Number.isNaN(parsed) || parsed < 1 ? 1 : parsed;
+  }, [qtyParam]);
+
+  const preselectedOptionsParam = searchParams?.get("selected");
+  const parsedSelection = useMemo(() => {
+    if (!preselectedOptionsParam) {
+      return null;
+    }
+    try {
+      const decoded = JSON.parse(
+        decodeURIComponent(preselectedOptionsParam)
+      );
+      if (Array.isArray(decoded)) {
+        return decoded as CartOptionSelection[];
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to parse selection", error);
+      return null;
+    }
+  }, [preselectedOptionsParam]);
+
+  const initialSelection = useMemo(() => {
+    const base = createInitialState(optionGroups);
+    if (!parsedSelection) {
+      return base;
+    }
+
+    const singles = { ...base.singles };
+    const multiples: Record<string, Set<string>> = {};
+    Object.entries(base.multiples).forEach(([key, set]) => {
+      multiples[key] = new Set(set);
+    });
+
+    parsedSelection.forEach((option) => {
+      const group = optionGroups.find((entry) => entry.title === option.group);
+      if (!group) {
+        return;
+      }
+      const matchedOption = group.options.find((item) => item.label === option.label);
+      if (!matchedOption) {
+        return;
+      }
+      if (group.type === "single") {
+        singles[group.id] = matchedOption.id;
+      } else {
+        multiples[group.id]?.add(matchedOption.id);
+      }
+    });
+
+    return {
+      singles,
+      multiples,
+    } satisfies SelectionState;
+  }, [optionGroups, parsedSelection]);
+
+  const [selection, setSelection] = useState<SelectionState>(initialSelection);
+  useEffect(() => {
+    setSelection(initialSelection);
+  }, [initialSelection]);
+
+  const [quantity, setQuantity] = useState(initialQuantity);
+  useEffect(() => {
+    setQuantity(initialQuantity);
+  }, [initialQuantity]);
+  const { addItem, replaceItem } = useCart();
   const router = useRouter();
 
   const totalAddons = useMemo(() => {
@@ -187,6 +255,9 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
   }, [optionGroups, selection]);
 
   const totalPrice = (product.price + totalAddons) * quantity;
+  const redirectTarget = searchParams?.get("redirect") ?? "/";
+  const updateIndexParam = searchParams?.get("updateIndex");
+  const updateIndex = updateIndexParam ? Number.parseInt(updateIndexParam, 10) : NaN;
 
   const handleAddToCart = () => {
     const options = optionGroups.flatMap((group) => {
@@ -218,26 +289,41 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
       });
     });
 
-    addItem({
+    const cartItem = {
       productId: product.id,
       quantity,
       options,
-    });
+    };
 
-    router.push("/");
+    if (!Number.isNaN(updateIndex)) {
+      replaceItem(updateIndex, cartItem);
+    } else {
+      addItem(cartItem);
+    }
+
+    router.push(redirectTarget);
   };
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#f9fafb] via-[#f3f6f9] to-[#f0f4f8] text-gray-800 pb-24">
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
-        <header className="flex items-center justify-between text-sm text-gray-500">
-          <div>
+        <header className="flex items-center gap-4 text-sm text-gray-500">
+          <button
+            type="button"
+            onClick={() => router.push(redirectTarget)}
+            className="detail-header-back shrink-0"
+            aria-label="Kembali ke menu"
+          >
+            <span className="material-symbols-outlined text-base">chevron_left</span>
+            <span>Menu</span>
+          </button>
+          <div className="flex-1 text-center">
             <p className="uppercase tracking-[0.3em] text-xs font-semibold">Detail Produk</p>
             <h1 className="text-xl font-semibold text-gray-700 mt-1">
               {product.name}
             </h1>
           </div>
-          <span className="material-symbols-outlined text-gray-400">coffee</span>
+          <span className="material-symbols-outlined text-gray-400 shrink-0">coffee</span>
         </header>
 
         <section className="mt-6 overflow-hidden rounded-3xl shadow-lg bg-white/60 backdrop-blur">
@@ -328,9 +414,7 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
                     >
                       <span>{option.label}</span>
                       {priceTag ? (
-                        <span
-                          className="detail-option-button__price block text-xs font-semibold mt-1"
-                        >
+                        <span className="detail-option-button__price block text-xs font-semibold mt-1">
                           {priceTag}
                         </span>
                       ) : null}

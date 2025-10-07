@@ -9,7 +9,7 @@ export type CategoryPillsProps = {
 export function CategoryPills({ items, activeSlug }: CategoryPillsProps) {
   return (
     <nav
-      className="md:hidden sticky top-[68px] z-10 bg-white px-4 py-2 border-b border-gray-200 overflow-x-auto whitespace-nowrap"
+      className="md:hidden px-4 py-2 border-b border-gray-200 overflow-x-auto whitespace-nowrap"
       data-animate-group="category-mobile"
       data-animate-stagger="60"
     >

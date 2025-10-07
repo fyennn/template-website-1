@@ -22,6 +22,7 @@ export type CartContextValue = {
   summary: CartSummary;
   addItem: (item: CartItem) => void;
   updateQuantity: (index: number, quantity: number) => void;
+  replaceItem: (index: number, item: CartItem) => void;
   removeItem: (index: number) => void;
   clear: () => void;
 };
@@ -51,6 +52,12 @@ export function CartProvider({
     );
   }, []);
 
+  const replaceItem = useCallback((index: number, item: CartItem) => {
+    setItems((prev) =>
+      prev.map((entry, idx) => (idx === index ? { ...item } : entry))
+    );
+  }, []);
+
   const removeItem = useCallback((index: number) => {
     setItems((prev) => prev.filter((_, idx) => idx !== index));
   }, []);
@@ -61,8 +68,8 @@ export function CartProvider({
   const summary = useMemo(() => computeCartSummary(lines), [lines]);
 
   const value = useMemo(
-    () => ({ items, lines, summary, addItem, updateQuantity, removeItem, clear }),
-    [items, lines, summary, addItem, updateQuantity, removeItem, clear]
+    () => ({ items, lines, summary, addItem, updateQuantity, replaceItem, removeItem, clear }),
+    [items, lines, summary, addItem, updateQuantity, replaceItem, removeItem, clear]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

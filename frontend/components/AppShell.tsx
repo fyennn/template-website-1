@@ -11,22 +11,52 @@ import { CartFab } from "./CartFab";
 export type AppShellProps = {
   activeSlug: string;
   children: React.ReactNode;
+  hideNavigation?: boolean;
+  hideSearch?: boolean;
 };
 
-export function AppShell({ activeSlug, children }: AppShellProps) {
+export function AppShell({
+  activeSlug,
+  children,
+  hideNavigation = false,
+  hideSearch = false,
+  title,
+  hideCartFab = false,
+  backHref,
+  hideLocation = false,
+}: AppShellProps & {
+  title?: string;
+  hideCartFab?: boolean;
+  backHref?: string;
+  hideLocation?: boolean;
+}) {
   useEffect(() => {
     const cleanup = setupMotionEffects();
     return () => cleanup();
   }, [activeSlug]);
 
   return (
-    <div className="max-w-7xl mx-auto flex">
-      <Sidebar items={NAVIGATION} activeSlug={activeSlug} />
+    <div className="max-w-7xl mx-auto md:flex">
+      {!hideNavigation ? (
+        <Sidebar items={NAVIGATION} activeSlug={activeSlug} />
+      ) : null}
       <div className="flex-1 min-w-0">
-        <Header />
-        <CategoryPills items={NAVIGATION} activeSlug={activeSlug} />
+        <div
+          className="sticky top-0 z-30 bg-white"
+          style={{ top: "env(safe-area-inset-top, 0px)" }}
+        >
+          <Header
+            hideSearch={hideSearch}
+            hideLocation={hideLocation}
+            title={title}
+            backHref={backHref}
+          />
+          {!hideNavigation ? (
+            <CategoryPills items={NAVIGATION} activeSlug={activeSlug} />
+          ) : null}
+        </div>
         {children}
-        <CartFab />
+        {!hideCartFab ? <CartFab /> : null}
       </div>
     </div>
   );

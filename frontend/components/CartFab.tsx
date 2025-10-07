@@ -13,6 +13,12 @@ export function CartFab() {
 
   return (
     <div className="fixed bottom-6 right-6 z-30">
+      <span className="cart-hint">
+        <span className="material-symbols-outlined text-[14px] text-emerald-200">
+          swipe_up
+        </span>
+        Checkout
+      </span>
       <Link
         href="/cart"
         className="shop-fab enter-animated enter-pop enter-duration-long"

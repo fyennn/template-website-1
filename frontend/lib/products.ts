@@ -9,6 +9,7 @@ export type Product = {
 export type ProductCatalog = Record<string, Product[]>;
 
 export const PRODUCT_CATALOG = {
+  all: [] as Product[],
   "pistachio-series": [
     {
       id: "pistachio-latte",
@@ -137,8 +138,27 @@ export const PRODUCT_CATALOG = {
 
 export type CategorySlug = keyof typeof PRODUCT_CATALOG;
 
+const nonAllEntries = Object.entries(PRODUCT_CATALOG).filter(
+  ([slug]) => slug !== "all"
+);
+
+PRODUCT_CATALOG.all = nonAllEntries
+  .flatMap(([, products]) => products)
+  .filter(
+    (product, index, self) =>
+      self.findIndex((item) => item.id === product.id) === index
+  );
+
+export const ALL_PRODUCTS_WITH_CATEGORY = nonAllEntries.flatMap(
+  ([category, products]) =>
+    products.map((product) => ({
+      product,
+      category: category as CategorySlug,
+    }))
+);
+
 export const PRODUCT_CATEGORY_LOOKUP = Object.fromEntries(
-  Object.entries(PRODUCT_CATALOG).flatMap(([category, products]) =>
+  nonAllEntries.flatMap(([category, products]) =>
     products.map((product) => [product.id, category])
   )
 ) as Record<string, CategorySlug>;
