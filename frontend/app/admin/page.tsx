@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/authStore";
 
 type AdminNavKey = "dashboard" | "products" | "orders" | "settings";
 
@@ -13,7 +15,19 @@ const NAV_ITEMS: Array<{ key: AdminNavKey; label: string; icon: string }> = [
 ];
 
 export default function AdminPage() {
+  const router = useRouter();
+  const { isAdmin, logout } = useAuth();
   const [activeKey, setActiveKey] = useState<AdminNavKey>("dashboard");
+
+  useEffect(() => {
+    if (!isAdmin) {
+      router.replace("/login");
+    }
+  }, [isAdmin, router]);
+
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-white to-[#eef6f3]">
@@ -26,23 +40,32 @@ export default function AdminPage() {
               <h1 className="text-lg font-semibold text-gray-700">SPM Café Dashboard</h1>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span className="material-symbols-outlined text-base text-emerald-500">notifications</span>
-            <div className="flex items-center gap-2">
-              <div className="h-9 w-9 rounded-full bg-emerald-100 text-emerald-600 grid place-items-center text-sm font-semibold">
-                AD
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <span className="material-symbols-outlined text-base text-emerald-500">notifications</span>
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-full bg-emerald-100 text-emerald-600 grid place-items-center text-sm font-semibold">
+                  AD
               </div>
               <div className="leading-tight">
                 <p className="font-semibold text-gray-700">Admin</p>
                 <p className="text-xs">admin@spmcafe.id</p>
               </div>
             </div>
-            <Link
-              href="/"
-              className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
-            >
-              Lihat Menu
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/"
+                className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+              >
+                Lihat Menu
+              </Link>
+              <button
+                type="button"
+                className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
+                onClick={logout}
+              >
+                Keluar
+              </button>
+            </div>
           </div>
         </div>
       </header>
