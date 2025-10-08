@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { useCart } from "@/lib/cartStore";
 import { useOrders } from "@/lib/orderStore";
@@ -42,6 +43,7 @@ function useCountdown(seconds: number) {
 }
 
 export default function QrisPaymentPage() {
+  const router = useRouter();
   const { lines, summary, tableId, clear: clearCart } = useCart();
   const { addOrder } = useOrders();
   const [status, setStatus] = useState<"idle" | "success">("idle");
@@ -115,7 +117,7 @@ export default function QrisPaymentPage() {
         }),
       }));
 
-      addOrder({
+      const order = {
         id: orderId,
         createdAt,
         tableId: tableId ?? null,
@@ -124,10 +126,12 @@ export default function QrisPaymentPage() {
         totalLabel: summary.totalLabel,
         status: "pending",
         items: orderItems,
-      });
+      };
+      addOrder(order);
 
       clearCart();
       setStatus("success");
+      router.push(`/status?orderId=${order.id}`);
     } catch (err) {
       console.error("Failed to confirm payment", err);
       setError("Terjadi kesalahan saat menyimpan pesanan.");
@@ -257,7 +261,7 @@ export default function QrisPaymentPage() {
               onClick={handleConfirmPayment}
               disabled={status === "success"}
             >
-              {status === "success" ? "Pembayaran Terkonfirmasi" : "Konfirmasi Pembayaran"}
+              {status === "success" ? "Mengalihkan..." : "Konfirmasi Pembayaran"}
             </button>
             <Link
               href="/cart"
@@ -271,21 +275,6 @@ export default function QrisPaymentPage() {
             <p className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 rounded-2xl px-4 py-2">
               {error}
             </p>
-          ) : null}
-
-          {status === "success" ? (
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 p-4 text-xs text-gray-600">
-              <p className="font-semibold text-emerald-700">Pembayaran berhasil disimulasikan.</p>
-              <p>Pesananmu sudah masuk ke dashboard admin bagian Pesanan.</p>
-              <p className="mt-2">
-                <Link
-                  href="/admin"
-                  className="text-emerald-600 font-semibold hover:text-emerald-700"
-                >
-                  Lihat pesanan di admin
-                </Link>
-              </p>
-            </div>
           ) : null}
 
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 p-4 flex items-start gap-3">
