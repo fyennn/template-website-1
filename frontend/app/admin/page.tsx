@@ -180,6 +180,7 @@ export default function AdminPage() {
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [tableError, setTableError] = useState<string | null>(null);
+  const [pendingToggleSlug, setPendingToggleSlug] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -500,7 +501,13 @@ export default function AdminPage() {
                         </a>
                         <button
                           type="button"
-                          onClick={() => handleToggleTable(table.slug)}
+                          onClick={() => {
+                            if (table.active) {
+                              setPendingToggleSlug(table.slug);
+                            } else {
+                              handleToggleTable(table.slug);
+                            }
+                          }}
                           className={`rounded-full border px-3 py-1 font-semibold transition ${
                             table.active
                               ? "border-red-200 bg-red-50 text-red-500 hover:bg-red-100"
@@ -577,32 +584,64 @@ export default function AdminPage() {
         </main>
       </div>
       </div>
-      {showClearConfirm ? (
+      {showClearConfirm || pendingToggleSlug ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
-            <p className="text-sm font-semibold text-gray-800">Hapus semua riwayat pesanan?</p>
-            <p className="text-xs text-gray-500">
-              Tindakan ini akan mengosongkan daftar pesanan. Data dapat hilang secara permanen.
-            </p>
-            <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
-                onClick={() => setShowClearConfirm(false)}
-              >
-                Batalkan
-              </button>
-              <button
-                type="button"
-                className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
-                onClick={() => {
-                  clearOrders();
-                  setShowClearConfirm(false);
-                }}
-              >
-                Hapus
-              </button>
-            </div>
+            {showClearConfirm ? (
+              <>
+                <p className="text-sm font-semibold text-gray-800">Hapus semua riwayat pesanan?</p>
+                <p className="text-xs text-gray-500">
+                  Tindakan ini akan mengosongkan daftar pesanan. Data dapat hilang secara permanen.
+                </p>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
+                    onClick={() => setShowClearConfirm(false)}
+                  >
+                    Batalkan
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
+                    onClick={() => {
+                      clearOrders();
+                      setShowClearConfirm(false);
+                    }}
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {pendingToggleSlug ? (
+              <>
+                <p className="text-sm font-semibold text-gray-800">Nonaktifkan QR meja?</p>
+                <p className="text-xs text-gray-500">
+                  Pelanggan tidak akan bisa memesan melalui QR meja ini sampai diaktifkan lagi.
+                </p>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
+                    onClick={() => setPendingToggleSlug(null)}
+                  >
+                    Batalkan
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
+                    onClick={() => {
+                      handleToggleTable(pendingToggleSlug);
+                      setPendingToggleSlug(null);
+                    }}
+                  >
+                    Nonaktifkan
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
