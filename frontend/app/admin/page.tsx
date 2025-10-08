@@ -172,6 +172,7 @@ export default function AdminPage() {
   const router = useRouter();
   const { isAdmin, logout } = useAuth();
   const { orders, markServed, clearOrders } = useOrders();
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [activeKey, setActiveKey] = useState<AdminNavKey>("dashboard");
   const [tables, setTables] = useState<TableEntry[]>([]);
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
@@ -503,7 +504,7 @@ export default function AdminPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={clearOrders}
+                  onClick={() => setShowClearConfirm(true)}
                   className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
                 >
                   Hapus Riwayat
@@ -541,3 +542,32 @@ export default function AdminPage() {
     </div>
   );
 }
+        {showClearConfirm ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
+              <p className="text-sm font-semibold text-gray-800">Hapus semua riwayat pesanan?</p>
+              <p className="text-xs text-gray-500">
+                Tindakan ini akan mengosongkan daftar pesanan. Data dapat hilang secara permanen.
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
+                  onClick={() => setShowClearConfirm(false)}
+                >
+                  Batalkan
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
+                  onClick={() => {
+                    clearOrders();
+                    setShowClearConfirm(false);
+                  }}
+                >
+                  Hapus
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
