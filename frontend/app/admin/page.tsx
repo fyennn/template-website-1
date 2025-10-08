@@ -25,6 +25,115 @@ type TableEntry = {
   qrDataUrl: string;
 };
 
+type OrderListSectionProps = {
+  title: string;
+  description: string;
+  orders: ReturnType<typeof useOrders>["orders"];
+  onMarkServed?: (id: string) => void;
+  actionLabel: string;
+};
+
+function OrderListSection({ title, description, orders, onMarkServed, actionLabel }: OrderListSectionProps) {
+  if (orders.length === 0) {
+    return (
+      <section className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6 text-sm text-gray-500">
+        <p className="font-semibold text-gray-600">{title}</p>
+        <p className="mt-1">{description}</p>
+        <p className="mt-3 text-xs text-gray-400">Belum ada pesanan pada kategorinya.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      <header>
+        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">{title}</p>
+        <p className="text-sm text-gray-500 mt-1">{description}</p>
+      </header>
+      <div className="space-y-4">
+        {orders.map((order) => (
+          <div
+            key={order.id}
+            className="rounded-2xl border border-emerald-100 bg-white/75 shadow-sm p-5 space-y-4"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Order ID</p>
+                <p className="text-sm font-semibold text-gray-700">{order.id}</p>
+                <p className="text-xs text-gray-500">
+                  {new Date(order.createdAt).toLocaleString("id-ID", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Meja</p>
+                <p className="text-sm font-semibold text-emerald-600">
+                  {order.tableId ?? "Take Away"}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-emerald-50 bg-emerald-50/60 p-4">
+              <div className="grid gap-2 text-sm text-gray-600">
+                {order.items.map((item) => (
+                  <div key={`${order.id}-${item.name}`} className="flex justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-700">
+                        {item.name} <span className="text-xs text-gray-500">x{item.quantity}</span>
+                      </p>
+                      {item.options.length > 0 ? (
+                        <ul className="text-xs text-gray-500 list-disc ml-4">
+                          {item.options.map((opt, index) => (
+                            <li key={index}>{opt}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                    <span className="font-semibold text-gray-700">{item.linePriceLabel}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="text-sm text-gray-500 space-y-1">
+                <div className="flex gap-4">
+                  <span>Subtotal</span>
+                  <span className="font-semibold text-gray-700">{order.subtotalLabel}</span>
+                </div>
+                <div className="flex gap-4">
+                  <span>Pajak</span>
+                  <span className="font-semibold text-gray-700">{order.taxLabel}</span>
+                </div>
+                <div className="flex gap-4 text-emerald-600 font-semibold">
+                  <span>Total</span>
+                  <span>{order.totalLabel}</span>
+                </div>
+              </div>
+
+              {onMarkServed ? (
+                <button
+                  type="button"
+                  onClick={() => onMarkServed(order.id)}
+                  className="rounded-full bg-emerald-500 text-white px-4 py-2 text-xs font-semibold shadow hover:bg-emerald-600 transition"
+                >
+                  {actionLabel}
+                </button>
+              ) : (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-600">
+                  {actionLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 async function generateTableEntry(index: number, origin: string): Promise<TableEntry> {
   const padded = index.toString().padStart(2, "0");
   const slug = `meja-${padded}`;
@@ -371,7 +480,7 @@ export default function AdminPage() {
           ) : null}
 
           {activeKey === "orders" ? (
-            <section className="space-y-5">
+            <section className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pesanan Masuk</p>
@@ -389,90 +498,21 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              {orders.length === 0 ? (
-                <div className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6 text-sm text-gray-500">
-                  Belum ada pesanan. Konfirmasi pembayaran QRIS untuk melihat data uji coba.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {orders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="rounded-2xl border border-emerald-100 bg-white/75 shadow-sm p-5 space-y-4"
-                    >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Order ID</p>
-                          <p className="text-sm font-semibold text-gray-700">{order.id}</p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(order.createdAt).toLocaleString("id-ID", {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            })}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500">Meja</p>
-                          <p className="text-sm font-semibold text-emerald-600">
-                            {order.tableId ?? "Take Away"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-emerald-50 bg-emerald-50/60 p-4">
-                        <div className="grid gap-2 text-sm text-gray-600">
-                          {order.items.map((item) => (
-                            <div key={`${order.id}-${item.name}`} className="flex justify-between">
-                              <div>
-                                <p className="font-semibold text-gray-700">
-                                  {item.name} <span className="text-xs text-gray-500">x{item.quantity}</span>
-                                </p>
-                                {item.options.length > 0 ? (
-                                  <ul className="text-xs text-gray-500 list-disc ml-4">
-                                    {item.options.map((opt, index) => (
-                                      <li key={index}>{opt}</li>
-                                    ))}
-                                  </ul>
-                                ) : null}
-                              </div>
-                              <span className="font-semibold text-gray-700">{item.linePriceLabel}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="text-sm text-gray-500 space-y-1">
-                          <div className="flex gap-4">
-                            <span>Subtotal</span>
-                            <span className="font-semibold text-gray-700">{order.subtotalLabel}</span>
-                          </div>
-                          <div className="flex gap-4">
-                            <span>Pajak</span>
-                            <span className="font-semibold text-gray-700">{order.taxLabel}</span>
-                          </div>
-                          <div className="flex gap-4 text-emerald-600 font-semibold">
-                            <span>Total</span>
-                            <span>{order.totalLabel}</span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => markServed(order.id)}
-                          className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                            order.status === "served"
-                              ? "border border-emerald-200 bg-emerald-50 text-emerald-600"
-                              : "bg-emerald-500 text-white shadow hover:bg-emerald-600"
-                          }`}
-                        >
-                          {order.status === "served" ? "Sudah Diantar" : "Tandai Sudah Diantar"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-6">
+                <OrderListSection
+                  title="Proses Pengantaran"
+                  description="Pesanan berikut siap diantar, tekan tombol jika sudah selesai."
+                  orders={orders.filter((order) => order.status !== "served")}
+                  onMarkServed={markServed}
+                  actionLabel="Tandai Sudah Diantar"
+                />
+                <OrderListSection
+                  title="Pesanan Selesai"
+                  description="Riwayat pesanan yang telah diantar."
+                  orders={orders.filter((order) => order.status === "served")}
+                  actionLabel="Sudah Diantar"
+                />
+              </div>
             </section>
           ) : null}
 
