@@ -1,29 +1,128 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import { useAuth } from "@/lib/authStore";
 
-type AdminNavKey = "dashboard" | "products" | "orders" | "settings";
+type AdminNavKey = "dashboard" | "products" | "tables" | "orders" | "settings";
 
 const NAV_ITEMS: Array<{ key: AdminNavKey; label: string; icon: string }> = [
   { key: "dashboard", label: "Ringkasan", icon: "space_dashboard" },
   { key: "products", label: "Produk", icon: "coffee" },
+  { key: "tables", label: "Meja", icon: "table_restaurant" },
   { key: "orders", label: "Pesanan", icon: "receipt_long" },
   { key: "settings", label: "Pengaturan", icon: "settings" },
 ];
+
+type TableEntry = {
+  id: number;
+  name: string;
+  slug: string;
+  url: string;
+  qrDataUrl: string;
+};
+
+async function generateTableEntry(index: number, origin: string): Promise<TableEntry> {
+  const padded = index.toString().padStart(2, "0");
+  const slug = `meja-${padded}`;
+  const safeOrigin = origin || "https://spm-cafe.local";
+  const url = `${safeOrigin}/menu?table=${slug}`;
+  const qrDataUrl = await QRCode.toDataURL(url, {
+    width: 320,
+    margin: 1,
+    color: {
+      dark: "#0f766e",
+      light: "#ffffff",
+    },
+  });
+  return {
+    id: index,
+    name: `Meja ${padded}`,
+    slug,
+    url,
+    qrDataUrl,
+  };
+}
 
 export default function AdminPage() {
   const router = useRouter();
   const { isAdmin, logout } = useAuth();
   const [activeKey, setActiveKey] = useState<AdminNavKey>("dashboard");
+  const [tables, setTables] = useState<TableEntry[]>([]);
+  const [isGeneratingTable, setIsGeneratingTable] = useState(false);
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) {
       router.replace("/login");
     }
   }, [isAdmin, router]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const bootstrapTables = async () => {
+      try {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const defaults = await Promise.all(
+          [1, 2, 3].map((index) => generateTableEntry(index, origin))
+        );
+        if (isMounted) {
+          setTables((prev) => (prev.length > 0 ? prev : defaults));
+        }
+      } catch (error) {
+        console.error("Failed to bootstrap tables", error);
+      }
+    };
+
+    bootstrapTables();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin]);
+
+  const nextTableIndex = useMemo(() => tables.length + 1, [tables.length]);
+
+  const handleAddTable = async () => {
+    if (isGeneratingTable) {
+      return;
+    }
+    try {
+      setTableError(null);
+      setIsGeneratingTable(true);
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const entry = await generateTableEntry(nextTableIndex, origin);
+      setTables((prev) => [...prev, entry]);
+    } catch (error) {
+      console.error("Failed to generate table QR", error);
+      setTableError("Gagal membuat QR meja. Coba lagi.");
+    } finally {
+      setIsGeneratingTable(false);
+    }
+  };
+
+  const handleCopyLink = async (slug: string, url: string) => {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setTableError("Clipboard tidak tersedia di browser ini.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedSlug(slug);
+      window.setTimeout(() => setCopiedSlug((current) => (current === slug ? null : current)), 2000);
+    } catch (error) {
+      console.error("Failed to copy table link", error);
+      setTableError("Tidak dapat menyalin tautan. Coba secara manual.");
+    }
+  };
 
   if (!isAdmin) {
     return null;
@@ -183,6 +282,88 @@ export default function AdminPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </section>
+          ) : null}
+
+          {activeKey === "tables" ? (
+            <section className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">
+                    Pengelolaan Meja
+                  </p>
+                  <h2 className="text-xl font-semibold text-gray-700">QR Pemesanan Meja</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Tempel QR di meja agar pelanggan bisa memesan langsung dari perangkat mereka.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddTable}
+                  disabled={isGeneratingTable}
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600 transition disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isGeneratingTable ? "Membuat…" : "Tambah Meja"}
+                </button>
+              </div>
+
+              {tableError ? (
+                <p className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 rounded-2xl px-4 py-2">
+                  {tableError}
+                </p>
+              ) : null}
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {tables.map((table) => (
+                  <div
+                    key={table.slug}
+                    className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-5 flex flex-col sm:flex-row gap-4"
+                  >
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700">{table.name}</p>
+                          <p className="text-xs text-gray-500">{table.slug}</p>
+                        </div>
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+                          Aktif
+                        </span>
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 px-3 py-2 text-xs text-gray-600 break-all">
+                        {table.url}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(table.slug, table.url)}
+                          className="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                        >
+                          {copiedSlug === table.slug ? "Tautan disalin" : "Salin tautan"}
+                        </button>
+                        <a
+                          href={table.qrDataUrl}
+                          download={`${table.slug}.png`}
+                          className="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                        >
+                          Download QR
+                        </a>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-white border border-emerald-100/80 p-3 shadow grid place-items-center">
+                      <img
+                        src={table.qrDataUrl}
+                        alt={`QR untuk ${table.name}`}
+                        className="h-36 w-36 object-contain"
+                      />
+                    </div>
+                  </div>
+                ))}
+                {tables.length === 0 ? (
+                  <div className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6 text-sm text-gray-500">
+                    QR meja akan muncul di sini setelah dibuat.
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}
