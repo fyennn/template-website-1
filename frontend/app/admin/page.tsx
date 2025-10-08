@@ -23,6 +23,7 @@ type TableEntry = {
   slug: string;
   url: string;
   qrDataUrl: string;
+  active: boolean;
 };
 
 type OrderListSectionProps = {
@@ -165,6 +166,7 @@ async function generateTableEntry(index: number, origin: string): Promise<TableE
     slug,
     url,
     qrDataUrl,
+    active: true,
   };
 }
 
@@ -246,6 +248,14 @@ export default function AdminPage() {
       console.error("Failed to copy table link", error);
       setTableError("Tidak dapat menyalin tautan. Coba secara manual.");
     }
+  };
+
+  const handleToggleTable = (slug: string) => {
+    setTables((prev) =>
+      prev.map((entry) =>
+        entry.slug === slug ? { ...entry, active: !entry.active } : entry
+      )
+    );
   };
 
   if (!isAdmin) {
@@ -451,8 +461,14 @@ export default function AdminPage() {
                           <p className="text-sm font-semibold text-gray-700">{table.name}</p>
                           <p className="text-xs text-gray-500">{table.slug}</p>
                         </div>
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-                          Aktif
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                            table.active
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                              : "border-gray-200 bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {table.active ? "Aktif" : "Nonaktif"}
                         </span>
                       </div>
                       <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 px-3 py-2 text-xs text-gray-600 break-all">
@@ -462,17 +478,37 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => handleCopyLink(table.slug, table.url)}
-                          className="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                          disabled={!table.active}
+                          className={`rounded-full border px-3 py-1 font-semibold transition ${
+                            table.active
+                              ? "border-emerald-200 bg-white text-emerald-600 hover:bg-emerald-50"
+                              : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
+                          }`}
                         >
                           {copiedSlug === table.slug ? "Tautan disalin" : "Salin tautan"}
                         </button>
                         <a
                           href={table.qrDataUrl}
                           download={`${table.slug}.png`}
-                          className="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                          className={`rounded-full border px-3 py-1 font-semibold transition ${
+                            table.active
+                              ? "border-emerald-200 bg-white text-emerald-600 hover:bg-emerald-50"
+                              : "border-gray-200 bg-gray-100 text-gray-400 pointer-events-none"
+                          }`}
                         >
                           Download QR
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTable(table.slug)}
+                          className={`rounded-full border px-3 py-1 font-semibold transition ${
+                            table.active
+                              ? "border-red-200 bg-red-50 text-red-500 hover:bg-red-100"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                          }`}
+                        >
+                          {table.active ? "Nonaktifkan" : "Aktifkan"}
+                        </button>
                       </div>
                     </div>
                     <div className="rounded-2xl bg-white border border-emerald-100/80 p-3 shadow grid place-items-center">
