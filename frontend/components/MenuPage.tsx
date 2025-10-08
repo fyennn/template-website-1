@@ -9,6 +9,7 @@ import { Header } from "@/components/Header";
 import { CategoryPills } from "@/components/CategoryPills";
 import { CartFab } from "@/components/CartFab";
 import { ProductCard } from "@/components/ProductCard";
+import { useCart } from "@/lib/cartStore";
 
 type MenuSection = {
   slug: CategorySlug;
@@ -31,10 +32,22 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const activeSlugRef = useRef(activeSlug);
   const intersectionMapRef = useRef<Map<string, IntersectionObserverEntry>>(new Map());
+  const { setTableId } = useCart();
 
   useEffect(() => {
     activeSlugRef.current = activeSlug;
   }, [activeSlug]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const tableParam = params.get("table");
+    if (tableParam) {
+      setTableId(tableParam);
+    }
+  }, [setTableId]);
 
   useEffect(() => {
     const cleanup = setupMotionEffects();

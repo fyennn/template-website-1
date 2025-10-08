@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { useAuth } from "@/lib/authStore";
+import { useOrders } from "@/lib/orderStore";
 
 type AdminNavKey = "dashboard" | "products" | "tables" | "orders" | "settings";
 
@@ -49,6 +50,7 @@ async function generateTableEntry(index: number, origin: string): Promise<TableE
 export default function AdminPage() {
   const router = useRouter();
   const { isAdmin, logout } = useAuth();
+  const { orders, markServed, clearOrders } = useOrders();
   const [activeKey, setActiveKey] = useState<AdminNavKey>("dashboard");
   const [tables, setTables] = useState<TableEntry[]>([]);
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
@@ -369,11 +371,108 @@ export default function AdminPage() {
           ) : null}
 
           {activeKey === "orders" ? (
-            <section className="space-y-3">
-              <h2 className="text-xl font-semibold text-gray-700">Pesanan</h2>
-              <p className="text-sm text-gray-500">
-                Modul ini akan menampilkan daftar pesanan pelanggan setelah integrasi backend.
-              </p>
+            <section className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pesanan Masuk</p>
+                  <h2 className="text-xl font-semibold text-gray-700">Daftar Pesanan</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Pesanan yang dikonfirmasi dari QRIS akan muncul di sini untuk pengantaran.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearOrders}
+                  className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                >
+                  Hapus Riwayat
+                </button>
+              </div>
+
+              {orders.length === 0 ? (
+                <div className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6 text-sm text-gray-500">
+                  Belum ada pesanan. Konfirmasi pembayaran QRIS untuk melihat data uji coba.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="rounded-2xl border border-emerald-100 bg-white/75 shadow-sm p-5 space-y-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Order ID</p>
+                          <p className="text-sm font-semibold text-gray-700">{order.id}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(order.createdAt).toLocaleString("id-ID", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Meja</p>
+                          <p className="text-sm font-semibold text-emerald-600">
+                            {order.tableId ?? "Take Away"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-emerald-50 bg-emerald-50/60 p-4">
+                        <div className="grid gap-2 text-sm text-gray-600">
+                          {order.items.map((item) => (
+                            <div key={`${order.id}-${item.name}`} className="flex justify-between">
+                              <div>
+                                <p className="font-semibold text-gray-700">
+                                  {item.name} <span className="text-xs text-gray-500">x{item.quantity}</span>
+                                </p>
+                                {item.options.length > 0 ? (
+                                  <ul className="text-xs text-gray-500 list-disc ml-4">
+                                    {item.options.map((opt, index) => (
+                                      <li key={index}>{opt}</li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                              </div>
+                              <span className="font-semibold text-gray-700">{item.linePriceLabel}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <div className="flex gap-4">
+                            <span>Subtotal</span>
+                            <span className="font-semibold text-gray-700">{order.subtotalLabel}</span>
+                          </div>
+                          <div className="flex gap-4">
+                            <span>Pajak</span>
+                            <span className="font-semibold text-gray-700">{order.taxLabel}</span>
+                          </div>
+                          <div className="flex gap-4 text-emerald-600 font-semibold">
+                            <span>Total</span>
+                            <span>{order.totalLabel}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => markServed(order.id)}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                            order.status === "served"
+                              ? "border border-emerald-200 bg-emerald-50 text-emerald-600"
+                              : "bg-emerald-500 text-white shadow hover:bg-emerald-600"
+                          }`}
+                        >
+                          {order.status === "served" ? "Sudah Diantar" : "Tandai Sudah Diantar"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           ) : null}
 

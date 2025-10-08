@@ -5,7 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { useCart } from "@/lib/cartStore";
+import { useOrders } from "@/lib/orderStore";
 import { categoryToPath } from "@/lib/navigation";
+import { formatCurrency } from "@/lib/products";
 
 const QR_PLACEHOLDER =
   "data:image/svg+xml;utf8," +
@@ -40,7 +42,10 @@ function useCountdown(seconds: number) {
 }
 
 export default function QrisPaymentPage() {
-  const { lines, summary } = useCart();
+  const { lines, summary, tableId, clear: clearCart } = useCart();
+  const { addOrder } = useOrders();
+  const [status, setStatus] = useState<"idle" | "success">("idle");
+  const [error, setError] = useState<string | null>(null);
   const { label: countdownLabel } = useCountdown(15 * 60);
 
   const qrReference = useMemo(() => {
@@ -88,6 +93,46 @@ export default function QrisPaymentPage() {
       </AppShell>
     );
   }
+
+  const handleConfirmPayment = async () => {
+    if (status === "success") {
+      return;
+    }
+    try {
+      setError(null);
+      const orderId = `ORD-${Date.now()}`;
+      const createdAt = new Date().toISOString();
+      const orderItems = lines.map((line) => ({
+        name: line.product.name,
+        quantity: line.quantity,
+        linePriceLabel: line.lineTotalLabel,
+        options: line.options.map((option) => {
+          if (option.priceDelta) {
+            const formatted = formatCurrency(option.priceDelta).replace("Rp", "Rp");
+            return `${option.label} (${option.priceDelta > 0 ? "+" : ""}${formatted.trim()})`;
+          }
+          return option.label;
+        }),
+      }));
+
+      addOrder({
+        id: orderId,
+        createdAt,
+        tableId: tableId ?? null,
+        subtotalLabel: summary.subtotalLabel,
+        taxLabel: summary.taxLabel,
+        totalLabel: summary.totalLabel,
+        status: "pending",
+        items: orderItems,
+      });
+
+      clearCart();
+      setStatus("success");
+    } catch (err) {
+      console.error("Failed to confirm payment", err);
+      setError("Terjadi kesalahan saat menyimpan pesanan.");
+    }
+  };
 
   return (
     <AppShell
@@ -150,6 +195,10 @@ export default function QrisPaymentPage() {
                 <span>Pajak (10%)</span>
                 <span>{summary.taxLabel}</span>
               </div>
+              <div className="flex justify-between">
+                <span>Meja</span>
+                <span>{tableId ?? "Take Away"}</span>
+              </div>
             </div>
           </div>
 
@@ -204,9 +253,11 @@ export default function QrisPaymentPage() {
           <div className="flex flex-col gap-3">
             <button
               type="button"
-              className="rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-emerald-600 transition"
+              className="rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={handleConfirmPayment}
+              disabled={status === "success"}
             >
-              Konfirmasi Pembayaran
+              {status === "success" ? "Pembayaran Terkonfirmasi" : "Konfirmasi Pembayaran"}
             </button>
             <Link
               href="/cart"
@@ -215,6 +266,27 @@ export default function QrisPaymentPage() {
               Kembali ke Keranjang
             </Link>
           </div>
+
+          {error ? (
+            <p className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 rounded-2xl px-4 py-2">
+              {error}
+            </p>
+          ) : null}
+
+          {status === "success" ? (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 p-4 text-xs text-gray-600">
+              <p className="font-semibold text-emerald-700">Pembayaran berhasil disimulasikan.</p>
+              <p>Pesananmu sudah masuk ke dashboard admin bagian Pesanan.</p>
+              <p className="mt-2">
+                <Link
+                  href="/admin"
+                  className="text-emerald-600 font-semibold hover:text-emerald-700"
+                >
+                  Lihat pesanan di admin
+                </Link>
+              </p>
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/90 p-4 flex items-start gap-3">
             <span className="material-symbols-outlined text-emerald-500">support_agent</span>
