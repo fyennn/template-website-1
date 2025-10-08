@@ -256,28 +256,28 @@ export default function AdminPage() {
     <>
       <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-white to-[#eef6f3]">
         <header className="border-b border-emerald-50/80 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-emerald-500 text-2xl">shield_person</span>
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Admin Panel</p>
-              <h1 className="text-lg font-semibold text-gray-700">SPM Café Dashboard</h1>
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-emerald-500 text-2xl">shield_person</span>
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Admin Panel</p>
+                <h1 className="text-lg font-semibold text-gray-700">SPM Café Dashboard</h1>
+              </div>
             </div>
-          </div>
             <div className="flex items-center gap-4 text-sm text-gray-500">
               <span className="material-symbols-outlined text-base text-emerald-500">notifications</span>
               <div className="flex items-center gap-2">
                 <div className="h-9 w-9 rounded-full bg-emerald-100 text-emerald-600 grid place-items-center text-sm font-semibold">
                   AD
+                </div>
+                <div className="leading-tight">
+                  <p className="font-semibold text-gray-700">Admin</p>
+                  <p className="text-xs">admin@spmcafe.id</p>
+                </div>
               </div>
-              <div className="leading-tight">
-                <p className="font-semibold text-gray-700">Admin</p>
-                <p className="text-xs">admin@spmcafe.id</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/"
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/"
                 className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
               >
                 Lihat Menu
@@ -539,6 +539,7 @@ export default function AdminPage() {
             </section>
           ) : null}
         </main>
+      </div>
       </div>
       {showClearConfirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
