@@ -46,15 +46,30 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") {
       return;
     }
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as OrderEntry[];
-        setOrders(parsed);
+    const readFromStorage = () => {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as OrderEntry[];
+          setOrders(parsed);
+        } else {
+          setOrders([]);
+        }
+      } catch (error) {
+        console.error("Failed to parse orders", error);
       }
-    } catch (error) {
-      console.error("Failed to parse orders", error);
-    }
+    };
+
+    readFromStorage();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY) {
+        readFromStorage();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   useEffect(() => {
