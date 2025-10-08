@@ -14,7 +14,6 @@ export default function CartPage() {
   const router = useRouter();
   const { lines, summary, updateQuantity, removeItem } = useCart();
   const [pendingRemove, setPendingRemove] = useState<number | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState("qris");
 
   const recommendations = useMemo(() => {
     const seen = new Set<string>();
@@ -242,35 +241,12 @@ export default function CartPage() {
 
           <section className="rounded-3xl bg-white/80 backdrop-blur shadow-sm p-6 space-y-4">
             <p className="text-sm font-semibold text-gray-700">Metode Pembayaran</p>
-            <div className="grid gap-3">
-              <label className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-gray-700 hover:border-emerald-300 cursor-pointer">
-                <span className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-emerald-600">qr_code_2</span>
-                  QRIS
-                </span>
-                <input
-                  type="radio"
-                  name="payment"
-                  value="qris"
-                  checked={selectedPayment === "qris"}
-                  onChange={() => setSelectedPayment("qris")}
-                  className="accent-emerald-500"
-                />
-              </label>
-              <label className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-gray-700 hover:border-emerald-300 cursor-pointer">
-                <span className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-emerald-600">account_balance_wallet</span>
-                  E-Wallet Indonesia
-                </span>
-                <input
-                  type="radio"
-                  name="payment"
-                  value="ewallet"
-                  checked={selectedPayment === "ewallet"}
-                  onChange={() => setSelectedPayment("ewallet")}
-                  className="accent-emerald-500"
-                />
-              </label>
+            <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-gray-700 flex items-center justify-between">
+              <span className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-emerald-600">qr_code_2</span>
+                QRIS
+              </span>
+              <span className="material-symbols-outlined text-emerald-500 text-base">check_circle</span>
             </div>
           </section>
         </section>
