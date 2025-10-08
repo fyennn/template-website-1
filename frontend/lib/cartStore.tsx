@@ -22,6 +22,7 @@ export type CartContextValue = {
   lines: DerivedCartLine[];
   summary: CartSummary;
   tableId: string | null;
+  tableActive: boolean;
   addItem: (item: CartItem) => void;
   updateQuantity: (index: number, quantity: number) => void;
   replaceItem: (index: number, item: CartItem) => void;
@@ -29,10 +30,12 @@ export type CartContextValue = {
   removeItem: (index: number) => void;
   clear: () => void;
   setTableId: (tableId: string | null) => void;
+  setTableActive: (active: boolean) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 const TABLE_STORAGE_KEY = "spm-cart-table";
+const TABLE_ACTIVE_KEY = "spm-cart-table-active";
 
 export function CartProvider({
   children,
@@ -43,6 +46,7 @@ export function CartProvider({
 }) {
   const [items, setItems] = useState<CartItem[]>(initialItems);
   const [tableId, setTableIdState] = useState<string | null>(null);
+  const [tableActive, setTableActiveState] = useState(true);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -52,6 +56,10 @@ export function CartProvider({
       const saved = window.localStorage.getItem(TABLE_STORAGE_KEY);
       if (saved) {
         setTableIdState(saved);
+      }
+      const activeSaved = window.localStorage.getItem(TABLE_ACTIVE_KEY);
+      if (activeSaved) {
+        setTableActiveState(activeSaved !== "false");
       }
     } catch (error) {
       console.error("Failed to restore table id", error);
@@ -109,6 +117,18 @@ export function CartProvider({
     }
   }, []);
 
+  const setTableActive = useCallback((value: boolean) => {
+    setTableActiveState(value);
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(TABLE_ACTIVE_KEY, value ? "true" : "false");
+    } catch (error) {
+      console.error("Failed to persist table active state", error);
+    }
+  }, []);
+
   const lines = useMemo(() => deriveCartLines(items), [items]);
   const summary = useMemo(() => computeCartSummary(lines), [lines]);
 
@@ -118,6 +138,7 @@ export function CartProvider({
       lines,
       summary,
       tableId,
+      tableActive,
       addItem,
       updateQuantity,
       replaceItem,
@@ -125,12 +146,14 @@ export function CartProvider({
       removeItem,
       clear,
       setTableId,
+      setTableActive,
     }),
     [
       items,
       lines,
       summary,
       tableId,
+      tableActive,
       addItem,
       updateQuantity,
       replaceItem,
@@ -138,6 +161,7 @@ export function CartProvider({
       removeItem,
       clear,
       setTableId,
+      setTableActive,
     ]
   );
 

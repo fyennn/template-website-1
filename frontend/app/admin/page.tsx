@@ -34,6 +34,8 @@ type OrderListSectionProps = {
   actionLabel: string;
 };
 
+const TABLES_STORAGE_KEY = "spm-admin-tables";
+
 function OrderListSection({ title, description, orders, onMarkServed, actionLabel }: OrderListSectionProps) {
   const [expanded, setExpanded] = useState(true);
   if (orders.length === 0) {
@@ -198,11 +200,36 @@ export default function AdminPage() {
     const bootstrapTables = async () => {
       try {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const defaults = await Promise.all(
-          [1, 2, 3].map((index) => generateTableEntry(index, origin))
-        );
+        let savedTables: TableEntry[] | null = null;
+        if (typeof window !== "undefined") {
+          const stored = window.localStorage.getItem(TABLES_STORAGE_KEY);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored) as TableEntry[];
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                savedTables = parsed.map((entry, index) => ({
+                  ...entry,
+                  id: entry.id ?? index + 1,
+                  active: entry.active !== false,
+                }));
+              }
+            } catch (error) {
+              console.error("Failed to parse stored tables", error);
+            }
+          }
+        }
+
+        if (!savedTables) {
+          savedTables = await Promise.all(
+            [1, 2, 3].map((index) => generateTableEntry(index, origin))
+          );
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(savedTables));
+          }
+        }
+
         if (isMounted) {
-          setTables((prev) => (prev.length > 0 ? prev : defaults));
+          setTables(savedTables);
         }
       } catch (error) {
         console.error("Failed to bootstrap tables", error);
@@ -227,7 +254,13 @@ export default function AdminPage() {
       setIsGeneratingTable(true);
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const entry = await generateTableEntry(nextTableIndex, origin);
-      setTables((prev) => [...prev, entry]);
+      setTables((prev) => {
+        const next = [...prev, entry];
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(next));
+        }
+        return next;
+      });
     } catch (error) {
       console.error("Failed to generate table QR", error);
       setTableError("Gagal membuat QR meja. Coba lagi.");
@@ -252,11 +285,15 @@ export default function AdminPage() {
   };
 
   const handleToggleTable = (slug: string) => {
-    setTables((prev) =>
-      prev.map((entry) =>
+    setTables((prev) => {
+      const next = prev.map((entry) =>
         entry.slug === slug ? { ...entry, active: !entry.active } : entry
-      )
-    );
+      );
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
   };
 
   if (!isAdmin) {

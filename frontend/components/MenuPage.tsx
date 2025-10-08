@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { NavigationItem } from "@/lib/navigation";
 import type { CategorySlug, Product } from "@/lib/products";
 import { setupMotionEffects } from "@/lib/motion";
@@ -32,7 +33,11 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const activeSlugRef = useRef(activeSlug);
   const intersectionMapRef = useRef<Map<string, IntersectionObserverEntry>>(new Map());
-  const { setTableId } = useCart();
+  const { setTableId, setTableActive, tableActive } = useCart();
+  const [currentTableSlug, setCurrentTableSlug] = useState<string | null>(null);
+  const [tableAvailabilityChecked, setTableAvailabilityChecked] = useState(false);
+
+  const TABLES_STORAGE_KEY = "spm-admin-tables";
 
   useEffect(() => {
     activeSlugRef.current = activeSlug;
@@ -45,9 +50,29 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
     const params = new URLSearchParams(window.location.search);
     const tableParam = params.get("table");
     if (tableParam) {
+      setCurrentTableSlug(tableParam);
       setTableId(tableParam);
+      let isActive = true;
+      const stored = window.localStorage.getItem(TABLES_STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as Array<{ slug: string; active?: boolean }>;
+          const match = parsed.find((entry) => entry.slug === tableParam);
+          if (match) {
+            isActive = match.active !== false;
+          }
+        } catch (error) {
+          console.error("Failed to read table configuration", error);
+        }
+      }
+      setTableActive(isActive);
+    } else {
+      setCurrentTableSlug(null);
+      setTableId(null);
+      setTableActive(true);
     }
-  }, [setTableId]);
+    setTableAvailabilityChecked(true);
+  }, [setTableId, setTableActive]);
 
   useEffect(() => {
     const cleanup = setupMotionEffects();
@@ -259,46 +284,69 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
           />
         </div>
 
-        <div
-          id="all"
-          ref={allSentinelRef}
-          data-slug="all"
-          className="block h-1 scroll-mt-28"
-        />
-
-        <main className={gridClassName}>
-          {sectionsWithProducts.map((section, sectionIndex) => (
-            <section
-              key={section.slug}
-              id={section.slug}
-              data-slug={section.slug}
-              ref={(node) => {
-                sectionRefs.current[section.slug] = node;
-              }}
-              className="space-y-4 scroll-mt-28"
-            >
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-700 enter-animated enter-from-left enter-duration-short">
-                  {section.label}
-                </h2>
+        {tableAvailabilityChecked && currentTableSlug && !tableActive ? (
+          <div className="p-6 pb-24 flex items-center justify-center min-h-[60vh]">
+            <div className="max-w-md rounded-3xl bg-white/85 backdrop-blur border border-emerald-50/80 p-8 text-center space-y-4 shadow-lg">
+              <span className="material-symbols-outlined text-emerald-500 text-4xl">qr_code_2</span>
+              <p className="text-lg font-semibold text-gray-700">QR Tidak Dapat Digunakan</p>
+              <p className="text-sm text-gray-500">
+                Maaf, QR untuk meja <span className="font-semibold text-gray-700">{currentTableSlug}</span> sementara tidak aktif.
+                Silakan hubungi kasir atau pindah ke meja lain.
+              </p>
+              <div className="flex justify-center">
+                <Link
+                  href="/menu"
+                  className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
+                >
+                  Kembali ke Menu
+                </Link>
               </div>
-              <div
-                className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-                data-animate-grid
-              >
-                {section.products.map((product, productIndex) => (
-                  <ProductCard
-                    key={`${section.slug}-${product.id}`}
-                    product={product}
-                    index={sectionIndex * 100 + productIndex}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </main>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div
+              id="all"
+              ref={allSentinelRef}
+              data-slug="all"
+              className="block h-1 scroll-mt-28"
+            />
 
-        <CartFab />
+            <main className={gridClassName}>
+              {sectionsWithProducts.map((section, sectionIndex) => (
+                <section
+                  key={section.slug}
+                  id={section.slug}
+                  data-slug={section.slug}
+                  ref={(node) => {
+                    sectionRefs.current[section.slug] = node;
+                  }}
+                  className="space-y-4 scroll-mt-28"
+                >
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-700 enter-animated enter-from-left enter-duration-short">
+                      {section.label}
+                    </h2>
+                  </div>
+                  <div
+                    className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+                    data-animate-grid
+                  >
+                    {section.products.map((product, productIndex) => (
+                      <ProductCard
+                        key={`${section.slug}-${product.id}`}
+                        product={product}
+                        index={sectionIndex * 100 + productIndex}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </main>
+
+            <CartFab />
+          </>
+        )}
       </div>
     </div>
   );
