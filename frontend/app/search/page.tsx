@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
 import { ALL_PRODUCTS_WITH_CATEGORY, type CategorySlug } from "@/lib/products";
-import { NAVIGATION } from "@/lib/navigation";
+import { NAVIGATION, categoryToPath } from "@/lib/navigation";
 
 const CATEGORY_LABEL_LOOKUP = NAVIGATION.reduce<Record<CategorySlug, string>>(
   (acc, item) => {
@@ -78,7 +78,7 @@ export default function SearchPage() {
                     {CATEGORY_LABEL_LOOKUP[category] ?? category}
                   </h2>
                   <Link
-                    href={category === "all" ? "/" : `/${category}`}
+                    href={categoryToPath(category)}
                     className="text-xs font-medium text-[var(--primary-color)] hover:text-emerald-700"
                   >
                     Lihat kategori

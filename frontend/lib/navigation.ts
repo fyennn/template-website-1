@@ -11,7 +11,7 @@ export type NavigationItem = {
 export const DEFAULT_CATEGORY: CategorySlug = "all";
 
 export function categoryToPath(slug: CategorySlug): string {
-  return slug === DEFAULT_CATEGORY ? "/" : `/${slug}`;
+  return slug === DEFAULT_CATEGORY ? "/menu" : `/menu#${slug}`;
 }
 
 export const CATEGORY_ALIASES: Record<string, CategorySlug> = {

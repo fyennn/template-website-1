@@ -14,7 +14,13 @@ type ProductPageProps = {
 };
 
 export default function ProductPage({ params }: ProductPageProps) {
-  const match = getProductById(params.productId);
+  const productId = params?.productId;
+
+  if (!productId) {
+    notFound();
+  }
+
+  const match = getProductById(productId);
 
   if (!match) {
     notFound();

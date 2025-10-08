@@ -3,12 +3,15 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
 import { formatCurrency, ALL_PRODUCTS_WITH_CATEGORY } from "@/lib/products";
+import { categoryToPath } from "@/lib/navigation";
 import { useCart } from "@/lib/cartStore";
 
 export default function CartPage() {
+  const router = useRouter();
   const { lines, summary, updateQuantity, removeItem } = useCart();
   const [pendingRemove, setPendingRemove] = useState<number | null>(null);
   const [selectedPayment, setSelectedPayment] = useState("qris");
@@ -34,7 +37,7 @@ export default function CartPage() {
         hideSearch
         title="Checkout"
         hideCartFab
-        backHref="/"
+        backHref={categoryToPath("all")}
         hideLocation
       >
         <main className="p-6">
@@ -46,7 +49,7 @@ export default function CartPage() {
               Jelajahi menu dan temukan minuman favoritmu.
             </p>
             <Link
-              href="/"
+              href={categoryToPath("all")}
               className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-color)] text-white px-6 py-3 text-sm font-semibold mt-6"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -65,7 +68,7 @@ export default function CartPage() {
       hideSearch
       title="Checkout"
       hideCartFab
-      backHref="/"
+      backHref={categoryToPath("all")}
       hideLocation
     >
       <div className="grid gap-6 p-4 pb-32 lg:grid-cols-[1fr_320px]">
@@ -106,7 +109,13 @@ export default function CartPage() {
                         <button
                           type="button"
                           className="cart-quantity-button h-8 w-8 rounded-full border flex items-center justify-center"
-                          onClick={() => updateQuantity(line.cartIndex, line.quantity - 1)}
+                          onClick={() => {
+                            if (line.quantity - 1 <= 0) {
+                              setPendingRemove(line.cartIndex);
+                              return;
+                            }
+                            updateQuantity(line.cartIndex, line.quantity - 1);
+                          }}
                         >
                           <span className="material-symbols-outlined text-sm">remove</span>
                         </button>
@@ -206,7 +215,7 @@ export default function CartPage() {
               </p>
             </div>
             <Link
-              href="/"
+              href={categoryToPath("all")}
               className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-2 text-xs font-semibold hover:bg-emerald-100"
             >
               Tambah
@@ -291,6 +300,7 @@ export default function CartPage() {
           <button
             type="button"
             className="cart-checkout-button w-full px-5 py-3 text-sm font-semibold text-white transition"
+            onClick={() => router.push("/payment/qris")}
           >
             Pesan Sekarang
           </button>

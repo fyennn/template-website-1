@@ -36,7 +36,7 @@ export function AppShell({
   }, [activeSlug]);
 
   return (
-    <div className="max-w-7xl mx-auto md:flex">
+    <div className="max-w-7xl mx-auto md:flex md:items-start md:min-h-screen">
       {!hideNavigation ? (
         <Sidebar items={NAVIGATION} activeSlug={activeSlug} />
       ) : null}

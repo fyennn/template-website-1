@@ -23,6 +23,7 @@ export type CartContextValue = {
   addItem: (item: CartItem) => void;
   updateQuantity: (index: number, quantity: number) => void;
   replaceItem: (index: number, item: CartItem) => void;
+  insertItemAfter: (index: number, item: CartItem) => void;
   removeItem: (index: number) => void;
   clear: () => void;
 };
@@ -58,6 +59,15 @@ export function CartProvider({
     );
   }, []);
 
+  const insertItemAfter = useCallback((index: number, item: CartItem) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const targetIndex = Math.min(next.length, index + 1);
+      next.splice(targetIndex, 0, { ...item });
+      return next;
+    });
+  }, []);
+
   const removeItem = useCallback((index: number) => {
     setItems((prev) => prev.filter((_, idx) => idx !== index));
   }, []);
@@ -68,8 +78,28 @@ export function CartProvider({
   const summary = useMemo(() => computeCartSummary(lines), [lines]);
 
   const value = useMemo(
-    () => ({ items, lines, summary, addItem, updateQuantity, replaceItem, removeItem, clear }),
-    [items, lines, summary, addItem, updateQuantity, replaceItem, removeItem, clear]
+    () => ({
+      items,
+      lines,
+      summary,
+      addItem,
+      updateQuantity,
+      replaceItem,
+      insertItemAfter,
+      removeItem,
+      clear,
+    }),
+    [
+      items,
+      lines,
+      summary,
+      addItem,
+      updateQuantity,
+      replaceItem,
+      insertItemAfter,
+      removeItem,
+      clear,
+    ]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

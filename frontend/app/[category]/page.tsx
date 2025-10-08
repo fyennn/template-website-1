@@ -1,11 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import { CategoryPage } from "@/components/CategoryPage";
-import {
-  CATEGORY_ALIASES,
-  DEFAULT_CATEGORY,
-  NAVIGATION,
-  categoryToPath,
-} from "@/lib/navigation";
+import { CATEGORY_ALIASES, NAVIGATION, categoryToPath } from "@/lib/navigation";
 import type { CategorySlug } from "@/lib/products";
 
 const CANONICAL_SLUGS = new Set<CategorySlug>(
@@ -39,14 +33,5 @@ export default function CategoryRoute({
     notFound();
   }
 
-  const aliasTarget = CATEGORY_ALIASES[params.category];
-  if (aliasTarget) {
-    redirect(categoryToPath(aliasTarget));
-  }
-
-  if (resolved === DEFAULT_CATEGORY) {
-    redirect(categoryToPath(DEFAULT_CATEGORY));
-  }
-
-  return <CategoryPage categorySlug={resolved} />;
+  redirect(categoryToPath(resolved));
 }

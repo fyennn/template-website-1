@@ -151,6 +151,44 @@ type ProductDetailProps = {
   category: CategorySlug;
 };
 
+function areSelectionsEqual(a: CartOptionSelection[], b: CartOptionSelection[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  const normalize = (options: CartOptionSelection[]) =>
+    [...options]
+      .map((option) => ({
+        group: option.group,
+        label: option.label,
+        price: option.priceDelta ?? 0,
+      }))
+      .sort((left, right) => {
+        if (left.group === right.group) {
+          if (left.label === right.label) {
+            return left.price - right.price;
+          }
+          return left.label.localeCompare(right.label);
+        }
+        return left.group.localeCompare(right.group);
+      });
+
+  const normalizedA = normalize(a);
+  const normalizedB = normalize(b);
+
+  return normalizedA.every((entry, index) => {
+    const other = normalizedB[index];
+    if (!other) {
+      return false;
+    }
+    return (
+      entry.group === other.group &&
+      entry.label === other.label &&
+      entry.price === other.price
+    );
+  });
+}
+
 export function ProductDetail({ product, category }: ProductDetailProps) {
   const optionGroups = useMemo(() => buildOptionGroups(category), [category]);
   const searchParams = useSearchParams();
@@ -225,7 +263,11 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
   useEffect(() => {
     setQuantity(initialQuantity);
   }, [initialQuantity]);
-  const { addItem, replaceItem } = useCart();
+  const originalOptions = useMemo(
+    () => parsedSelection?.map((option) => ({ ...option })) ?? null,
+    [parsedSelection]
+  );
+  const { addItem, replaceItem, insertItemAfter } = useCart();
   const router = useRouter();
 
   const totalAddons = useMemo(() => {
@@ -296,10 +338,32 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
     };
 
     if (!Number.isNaN(updateIndex)) {
+      if (quantity < initialQuantity && originalOptions) {
+        const optionsMatch = areSelectionsEqual(
+          originalOptions,
+          cartItem.options
+        );
+        if (!optionsMatch) {
+          const remainingQuantity = initialQuantity - quantity;
+          if (remainingQuantity > 0) {
+            replaceItem(updateIndex, {
+              productId: product.id,
+              quantity: remainingQuantity,
+              options: originalOptions.map((option) => ({ ...option })),
+            });
+            insertItemAfter(updateIndex, cartItem);
+          } else {
+            replaceItem(updateIndex, cartItem);
+          }
+          router.push(redirectTarget);
+          return;
+        }
+      }
       replaceItem(updateIndex, cartItem);
-    } else {
-      addItem(cartItem);
+      router.push(redirectTarget);
+      return;
     }
+    addItem(cartItem);
 
     router.push(redirectTarget);
   };
@@ -360,7 +424,7 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   {group.icon ? (
-                    <span className="material-symbols-outlined text-[20px] text-amber-700/70">
+                    <span className="material-symbols-outlined text-[20px] text-emerald-500/80">
                       {group.icon}
                     </span>
                   ) : null}
@@ -433,7 +497,7 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
               <div className="flex items-center gap-4">
                 <button
                   type="button"
-                  className="h-10 w-10 rounded-full border border-amber-300 text-amber-600 flex items-center justify-center text-lg"
+                  className="cart-quantity-button flex items-center justify-center text-lg"
                   onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
                 >
                   <span className="material-symbols-outlined">remove</span>
@@ -443,7 +507,7 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
                 </span>
                 <button
                   type="button"
-                  className="h-10 w-10 rounded-full border border-amber-300 text-amber-600 flex items-center justify-center text-lg"
+                  className="cart-quantity-button flex items-center justify-center text-lg"
                   onClick={() => setQuantity((prev) => prev + 1)}
                 >
                   <span className="material-symbols-outlined">add</span>
