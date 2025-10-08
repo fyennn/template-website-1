@@ -49,7 +49,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.currentTarget.value)}
                 className="w-full rounded-2xl border border-emerald-100 bg-white/70 px-4 py-3 text-sm text-gray-700 shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                placeholder="admin@spmcafe.id"
+                placeholder="Masukkan email"
                 required
               />
             </div>
