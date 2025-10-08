@@ -253,8 +253,9 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-white to-[#eef6f3]">
-      <header className="border-b border-emerald-50/80 bg-white/80 backdrop-blur">
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-white to-[#eef6f3]">
+        <header className="border-b border-emerald-50/80 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-emerald-500 text-2xl">shield_person</span>
@@ -539,35 +540,35 @@ export default function AdminPage() {
           ) : null}
         </main>
       </div>
-    </div>
-  );
-}
-        {showClearConfirm ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
-              <p className="text-sm font-semibold text-gray-800">Hapus semua riwayat pesanan?</p>
-              <p className="text-xs text-gray-500">
-                Tindakan ini akan mengosongkan daftar pesanan. Data dapat hilang secara permanen.
-              </p>
-              <div className="flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
-                  onClick={() => setShowClearConfirm(false)}
-                >
-                  Batalkan
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
-                  onClick={() => {
-                    clearOrders();
-                    setShowClearConfirm(false);
-                  }}
-                >
-                  Hapus
-                </button>
-              </div>
+      {showClearConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
+            <p className="text-sm font-semibold text-gray-800">Hapus semua riwayat pesanan?</p>
+            <p className="text-xs text-gray-500">
+              Tindakan ini akan mengosongkan daftar pesanan. Data dapat hilang secara permanen.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
+                onClick={() => setShowClearConfirm(false)}
+              >
+                Batalkan
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
+                onClick={() => {
+                  clearOrders();
+                  setShowClearConfirm(false);
+                }}
+              >
+                Hapus
+              </button>
             </div>
           </div>
-        ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+}
