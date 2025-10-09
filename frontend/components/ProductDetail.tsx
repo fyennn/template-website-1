@@ -267,7 +267,7 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
     () => parsedSelection?.map((option) => ({ ...option })) ?? null,
     [parsedSelection]
   );
-  const { addItem, replaceItem, insertItemAfter } = useCart();
+  const { addItem, replaceItem, insertItemAfter, tableId } = useCart();
   const router = useRouter();
 
   const totalAddons = useMemo(() => {
@@ -297,7 +297,14 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
   }, [optionGroups, selection]);
 
   const totalPrice = (product.price + totalAddons) * quantity;
-  const redirectTarget = searchParams?.get("redirect") ?? "/";
+  const defaultRedirectTarget = useMemo(() => {
+    if (!tableId) {
+      return "/menu";
+    }
+    return `/menu?table=${encodeURIComponent(tableId)}`;
+  }, [tableId]);
+  const redirectTarget =
+    searchParams?.get("redirect") ?? defaultRedirectTarget;
   const updateIndexParam = searchParams?.get("updateIndex");
   const updateIndex = updateIndexParam ? Number.parseInt(updateIndexParam, 10) : NaN;
 

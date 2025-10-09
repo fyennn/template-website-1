@@ -51,21 +51,28 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
     const tableParam = params.get("table");
     if (tableParam) {
       setCurrentTableSlug(tableParam);
-      setTableId(tableParam);
-      let isActive = true;
+      let nextActive = true;
+      let nextTableId: string | null = tableParam;
       const stored = window.localStorage.getItem(TABLES_STORAGE_KEY);
       if (stored) {
         try {
           const parsed = JSON.parse(stored) as Array<{ slug: string; active?: boolean }>;
           const match = parsed.find((entry) => entry.slug === tableParam);
           if (match) {
-            isActive = match.active !== false;
+            nextActive = match.active !== false;
+            if (!nextActive) {
+              nextTableId = null;
+            }
+          } else {
+            nextActive = false;
+            nextTableId = null;
           }
         } catch (error) {
           console.error("Failed to read table configuration", error);
         }
       }
-      setTableActive(isActive);
+      setTableId(nextTableId);
+      setTableActive(nextActive);
     } else {
       setCurrentTableSlug(null);
       setTableId(null);
@@ -98,7 +105,7 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
       }
 
       if (typeof window !== "undefined") {
-        const basePath = window.location.pathname;
+        const basePath = `${window.location.pathname}${window.location.search}`;
         const nextUrl = slug === "all" ? basePath : `${basePath}#${slug}`;
         if (window.location.hash !== (slug === "all" ? "" : `#${slug}`)) {
           window.history.replaceState(null, "", nextUrl);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
@@ -12,8 +12,22 @@ import { useCart } from "@/lib/cartStore";
 
 export default function CartPage() {
   const router = useRouter();
-  const { lines, summary, updateQuantity, removeItem } = useCart();
+  const { lines, summary, updateQuantity, removeItem, tableId } = useCart();
   const [pendingRemove, setPendingRemove] = useState<number | null>(null);
+
+  const withTableQuery = useCallback(
+    (path: string) => {
+      if (!tableId) {
+        return path;
+      }
+      const [base, hash] = path.split("#");
+      const separator = base.includes("?") ? "&" : "?";
+      return `${base}${separator}table=${encodeURIComponent(tableId)}${
+        hash ? `#${hash}` : ""
+      }`;
+    },
+    [tableId]
+  );
 
   const recommendations = useMemo(() => {
     const seen = new Set<string>();
@@ -36,7 +50,7 @@ export default function CartPage() {
         hideSearch
         title="Checkout"
         hideCartFab
-        backHref={categoryToPath("all")}
+        backHref={withTableQuery(categoryToPath("all"))}
         hideLocation
       >
         <main className="p-6">
@@ -48,7 +62,7 @@ export default function CartPage() {
               Jelajahi menu dan temukan minuman favoritmu.
             </p>
             <Link
-              href={categoryToPath("all")}
+              href={withTableQuery(categoryToPath("all"))}
               className="inline-flex items-center gap-2 rounded-full bg-[var(--primary-color)] text-white px-6 py-3 text-sm font-semibold mt-6"
             >
               <span className="material-symbols-outlined text-lg">arrow_back</span>
@@ -67,7 +81,7 @@ export default function CartPage() {
       hideSearch
       title="Checkout"
       hideCartFab
-      backHref={categoryToPath("all")}
+      backHref={withTableQuery(categoryToPath("all"))}
       hideLocation
     >
       <div className="grid gap-6 p-4 pb-32 lg:grid-cols-[1fr_320px]">
@@ -214,7 +228,7 @@ export default function CartPage() {
               </p>
             </div>
             <Link
-              href={categoryToPath("all")}
+              href={withTableQuery(categoryToPath("all"))}
               className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-2 text-xs font-semibold hover:bg-emerald-100"
             >
               Tambah
