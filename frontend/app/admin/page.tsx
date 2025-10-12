@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { useAuth } from "@/lib/authStore";
 import { useOrders } from "@/lib/orderStore";
+import type { ChangeEvent, FormEvent } from "react";
 
 type AdminNavKey = "dashboard" | "products" | "tables" | "orders" | "settings";
 
@@ -35,6 +36,329 @@ type OrderListSectionProps = {
 };
 
 const TABLES_STORAGE_KEY = "spm-admin-tables";
+const SETTINGS_STORAGE_KEY = "spm-admin-settings";
+
+type AdminSettings = {
+  store: {
+    name: string;
+    tagline: string;
+    description: string;
+    address: string;
+    phone: string;
+    email: string;
+    instagram: string;
+    wifiName: string;
+    wifiPassword: string;
+  };
+  hours: Array<{
+    day: string;
+    open: string;
+    close: string;
+    closed: boolean;
+  }>;
+  payment: {
+    qrisMerchantName: string;
+    qrisId: string;
+    bankName: string;
+    bankAccountNumber: string;
+    cashEnabled: boolean;
+    cardEnabled: boolean;
+    autoConfirmQris: boolean;
+    serviceCharge: number;
+    taxRate: number;
+  };
+  notifications: {
+    newOrder: boolean;
+    lowStock: boolean;
+    staffSchedule: boolean;
+    email: string;
+    whatsapp: string;
+    sound: boolean;
+  };
+  adminAccounts: Array<{
+    name: string;
+    role: string;
+    email: string;
+    phone: string;
+    status: "active" | "pending";
+    lastLogin: string;
+  }>;
+};
+
+const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
+  store: {
+    name: "SPM Café",
+    tagline: "Kopi lokal dengan suasana nyaman",
+    description:
+      "Kedai kopi rumahan yang menyajikan racikan kopi spesial dan makanan ringan favorit keluarga.",
+    address: "Jl. Melati No. 12, Bandung",
+    phone: "+62 812-1234-5678",
+    email: "admin@spmcafe.com",
+    instagram: "@spmcafe",
+    wifiName: "SPM-Cafe",
+    wifiPassword: "kopihangat",
+  },
+  hours: [
+    { day: "Senin", open: "08:00", close: "22:00", closed: false },
+    { day: "Selasa", open: "08:00", close: "22:00", closed: false },
+    { day: "Rabu", open: "08:00", close: "22:00", closed: false },
+    { day: "Kamis", open: "08:00", close: "22:00", closed: false },
+    { day: "Jumat", open: "08:00", close: "23:00", closed: false },
+    { day: "Sabtu", open: "09:00", close: "23:00", closed: false },
+    { day: "Minggu", open: "09:00", close: "21:00", closed: false },
+  ],
+  payment: {
+    qrisMerchantName: "SPM Café",
+    qrisId: "00020101021234567890",
+    bankName: "Bank Contoh",
+    bankAccountNumber: "1234567890",
+    cashEnabled: true,
+    cardEnabled: true,
+    autoConfirmQris: true,
+    serviceCharge: 5,
+    taxRate: 10,
+  },
+  notifications: {
+    newOrder: true,
+    lowStock: true,
+    staffSchedule: false,
+    email: "admin@spmcafe.com",
+    whatsapp: "+62 812-1234-5678",
+    sound: true,
+  },
+  adminAccounts: [
+    {
+      name: "Adit Pratama",
+      role: "Pemilik",
+      email: "adit@spmcafe.com",
+      phone: "+62 812-0000-1111",
+      status: "active",
+      lastLogin: "Hari ini, 08:45",
+    },
+    {
+      name: "Sinta Dewi",
+      role: "Manager",
+      email: "sinta@spmcafe.com",
+      phone: "+62 812-0000-2222",
+      status: "active",
+      lastLogin: "Kemarin, 17:20",
+    },
+  ],
+};
+
+function createDefaultSettings(): AdminSettings {
+  return {
+    store: { ...DEFAULT_ADMIN_SETTINGS.store },
+    hours: DEFAULT_ADMIN_SETTINGS.hours.map((entry) => ({ ...entry })),
+    payment: { ...DEFAULT_ADMIN_SETTINGS.payment },
+    notifications: { ...DEFAULT_ADMIN_SETTINGS.notifications },
+    adminAccounts: DEFAULT_ADMIN_SETTINGS.adminAccounts.map((entry) => ({ ...entry })),
+  };
+}
+
+function mergeStoredSettings(stored: Partial<AdminSettings> | null | undefined): AdminSettings {
+  if (!stored) {
+    return createDefaultSettings();
+  }
+
+  const mergedHours = DEFAULT_ADMIN_SETTINGS.hours.map((defaultEntry) => {
+    const candidate = stored.hours?.find((item) => item?.day === defaultEntry.day);
+    if (!candidate) {
+      return { ...defaultEntry };
+    }
+    return {
+      ...defaultEntry,
+      ...candidate,
+      day: defaultEntry.day,
+    };
+  });
+
+  const mergedAccounts =
+    stored.adminAccounts && stored.adminAccounts.length > 0
+      ? stored.adminAccounts.map((account) => ({
+          ...account,
+          status: account.status === "pending" ? "pending" : "active",
+        }))
+      : DEFAULT_ADMIN_SETTINGS.adminAccounts.map((entry) => ({ ...entry }));
+
+  return {
+    store: { ...DEFAULT_ADMIN_SETTINGS.store, ...(stored.store ?? {}) },
+    hours: mergedHours,
+    payment: { ...DEFAULT_ADMIN_SETTINGS.payment, ...(stored.payment ?? {}) },
+    notifications: { ...DEFAULT_ADMIN_SETTINGS.notifications, ...(stored.notifications ?? {}) },
+    adminAccounts: mergedAccounts,
+  };
+}
+
+const ADMIN_ROLE_OPTIONS = ["Pemilik", "Manager", "Supervisor", "Staff"] as const;
+
+type SettingsSectionKey =
+  | "store"
+  | "hours"
+  | "payment"
+  | "notifications"
+  | "access"
+  | "backup";
+
+const SETTINGS_SECTIONS: Array<{
+  key: SettingsSectionKey;
+  label: string;
+  description: string;
+  icon: string;
+}> = [
+  {
+    key: "store",
+    label: "Profil Toko",
+    description: "Identitas café dan kontak utama.",
+    icon: "storefront",
+  },
+  {
+    key: "hours",
+    label: "Jadwal Layanan",
+    description: "Jam buka dan status operasional.",
+    icon: "schedule",
+  },
+  {
+    key: "payment",
+    label: "Pembayaran",
+    description: "Metode, biaya layanan, dan pajak.",
+    icon: "credit_card",
+  },
+  {
+    key: "notifications",
+    label: "Notifikasi",
+    description: "Pengaturan pemberitahuan dan penerima.",
+    icon: "notifications_active",
+  },
+  {
+    key: "access",
+    label: "Akses Pengguna",
+    description: "Daftar admin dan undangan baru.",
+    icon: "group",
+  },
+  {
+    key: "backup",
+    label: "Pusat Backup",
+    description: "Ekspor laporan penjualan berkala.",
+    icon: "cloud_download",
+  },
+];
+
+type BackupRangeValue = "today" | "7d" | "14d" | "30d" | "this-month" | "last-month" | "custom";
+
+const BACKUP_RANGE_OPTIONS: Array<{ value: BackupRangeValue; label: string }> = [
+  { value: "today", label: "Hari ini" },
+  { value: "7d", label: "7 hari terakhir" },
+  { value: "14d", label: "14 hari terakhir" },
+  { value: "30d", label: "30 hari terakhir" },
+  { value: "this-month", label: "Bulan ini" },
+  { value: "last-month", label: "Bulan lalu" },
+  { value: "custom", label: "Rentang tanggal kustom" },
+];
+
+function backupRangeLabel(value: BackupRangeValue) {
+  const found = BACKUP_RANGE_OPTIONS.find((option) => option.value === value);
+  return found ? found.label : value;
+}
+
+function parseDateInput(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function calculateDaysBetween(start?: string, end?: string): number | null {
+  const startDate = parseDateInput(start ?? "");
+  const endDate = parseDateInput(end ?? "");
+  if (!startDate || !endDate) {
+    return null;
+  }
+  const diff = Math.abs(endDate.getTime() - startDate.getTime());
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+  return Number.isFinite(days) ? Math.max(days, 1) : null;
+}
+
+function computePreviewSummary(
+  range: BackupRangeValue,
+  customStart: string,
+  customEnd: string
+): { totalOrders: number; totalRevenue: number; periodLabel: string } {
+  const today = new Date();
+  let days = 7;
+  let periodLabel = backupRangeLabel(range);
+
+  switch (range) {
+    case "today":
+      days = 1;
+      break;
+    case "7d":
+      days = 7;
+      break;
+    case "14d":
+      days = 14;
+      break;
+    case "30d":
+      days = 30;
+      break;
+    case "this-month": {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      const diff = Math.floor((today.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      days = Math.max(diff, 1);
+      break;
+    }
+    case "last-month": {
+      const firstLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+      const diff =
+        Math.floor(
+          (lastDayLastMonth.getTime() - firstLastMonth.getTime()) / (1000 * 60 * 60 * 24)
+        ) + 1;
+      days = Math.max(diff, 1);
+      break;
+    }
+    case "custom": {
+      const diff = calculateDaysBetween(customStart, customEnd);
+      if (diff) {
+        days = diff;
+        periodLabel =
+          customStart && customEnd
+            ? `${customStart} – ${customEnd}`
+            : "Rentang tanggal kustom";
+      } else {
+        days = 3;
+        periodLabel = "Rentang tanggal kustom";
+      }
+      break;
+    }
+    default:
+      days = 7;
+      break;
+  }
+
+  const estimatedOrders = Math.max(15, Math.round(days * 4.8));
+  const averageTicket = 55000;
+  const totalRevenue = estimatedOrders * averageTicket;
+
+  return {
+    totalOrders: estimatedOrders,
+    totalRevenue,
+    periodLabel,
+  };
+}
+
+function formatCurrencyIDR(value: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatNumberID(value: number) {
+  return new Intl.NumberFormat("id-ID").format(value);
+}
 
 function OrderListSection({ title, description, orders, onMarkServed, actionLabel }: OrderListSectionProps) {
   const [expanded, setExpanded] = useState(true);
@@ -183,12 +507,291 @@ export default function AdminPage() {
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [tableError, setTableError] = useState<string | null>(null);
   const [pendingToggleSlug, setPendingToggleSlug] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AdminSettings>(() => createDefaultSettings());
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPhone, setNewAdminPhone] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<typeof ADMIN_ROLE_OPTIONS[number]>("Staff");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [adminInviteError, setAdminInviteError] = useState<string | null>(null);
+  const [activeSettingsSection, setActiveSettingsSection] =
+    useState<SettingsSectionKey>("store");
+  const [backupRange, setBackupRange] = useState<BackupRangeValue>("7d");
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [customRangeStart, setCustomRangeStart] = useState<string>("");
+  const [customRangeEnd, setCustomRangeEnd] = useState<string>("");
+  const [selectedExportFormats, setSelectedExportFormats] = useState<{
+    csv: boolean;
+    pdf: boolean;
+  }>({ csv: true, pdf: true });
+  const [previewSummary, setPreviewSummary] = useState<{
+    totalOrders: number;
+    totalRevenue: number;
+    periodLabel: string;
+  }>({
+    totalOrders: 0,
+    totalRevenue: 0,
+    periodLabel: backupRangeLabel("7d"),
+  });
+  const settingsHydratedRef = useRef(false);
+
+  const handleStoreFieldChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = event.target;
+    const field = name as keyof AdminSettings["store"];
+    setSettings((prev) => ({
+      ...prev,
+      store: {
+        ...prev.store,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleHourChange = (index: number, field: "open" | "close" | "closed", value: string | boolean) => {
+    setSettings((prev) => ({
+      ...prev,
+      hours: prev.hours.map((entry, idx) => {
+        if (idx !== index) {
+          return entry;
+        }
+        if (field === "closed") {
+          return { ...entry, closed: value as boolean };
+        }
+        if (field === "open") {
+          return { ...entry, open: value as string };
+        }
+        return { ...entry, close: value as string };
+      }),
+    }));
+  };
+
+  const togglePaymentField = (field: "cashEnabled" | "cardEnabled" | "autoConfirmQris") => {
+    setSettings((prev) => ({
+      ...prev,
+      payment: {
+        ...prev.payment,
+        [field]: !prev.payment[field],
+      },
+    }));
+  };
+
+  const handleBackupRangeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value as BackupRangeValue;
+    setBackupRange(value);
+    if (value !== "custom") {
+      setCustomRangeStart("");
+      setCustomRangeEnd("");
+      setPreviewSummary((prev) => ({
+        ...prev,
+        periodLabel: backupRangeLabel(value),
+      }));
+    }
+  };
+
+  const handleCustomRangeChange = (field: "start" | "end", value: string) => {
+    if (field === "start") {
+      setCustomRangeStart(value);
+    } else {
+      setCustomRangeEnd(value);
+    }
+  };
+
+  const toggleExportFormat = (field: "csv" | "pdf") => {
+    setSelectedExportFormats((prev) => {
+      const next = { ...prev, [field]: !prev[field] };
+      if (!next.csv && !next.pdf) {
+        next[field === "csv" ? "pdf" : "csv"] = true;
+      }
+      return next;
+    });
+  };
+
+  const handleExportSalesBackup = () => {
+    if (isExportingBackup) {
+      return;
+    }
+    setPreviewSummary(computePreviewSummary(backupRange, customRangeStart, customRangeEnd));
+    setIsExportingBackup(true);
+    const formats = [
+      selectedExportFormats.csv ? "CSV" : null,
+      selectedExportFormats.pdf ? "PDF" : null,
+    ]
+      .filter(Boolean)
+      .join(" & ");
+    const periodText =
+      backupRange === "custom" && customRangeStart && customRangeEnd
+        ? `${customRangeStart} hingga ${customRangeEnd}`
+        : backupRangeLabel(backupRange);
+    setSaveMessage(`Menyiapkan laporan ${formats} untuk periode ${periodText}…`);
+    window.setTimeout(() => {
+      setIsExportingBackup(false);
+      setSaveMessage(
+        `Laporan ${formats} untuk periode ${periodText} siap diunduh · mode demo.`
+      );
+      window.setTimeout(() => setSaveMessage(null), 2600);
+    }, 900);
+  };
+
+  const handleNotificationContactChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    const field = name as "email" | "whatsapp";
+    setSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleNotificationToggle = (field: "newOrder" | "lowStock" | "staffSchedule" | "sound") => {
+    setSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [field]: !prev.notifications[field],
+      },
+    }));
+  };
+
+  const handlePaymentNumberChange = (
+    field: "serviceCharge" | "taxRate",
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const parsedValue = Number(event.target.value);
+    const safeValue = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+    setSettings((prev) => ({
+      ...prev,
+      payment: {
+        ...prev.payment,
+        [field]: safeValue,
+      },
+    }));
+  };
+
+  const handleAddAdminAccount = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const email = newAdminEmail.trim();
+    if (!email) {
+      setAdminInviteError("Email wajib diisi sebelum mengundang admin baru.");
+      return;
+    }
+    const isDuplicate = settings.adminAccounts.some(
+      (account) => account.email.toLowerCase() === email.toLowerCase()
+    );
+    if (isDuplicate) {
+      setAdminInviteError("Email tersebut sudah terdaftar sebagai admin.");
+      return;
+    }
+
+    const nameFromEmail = email.includes("@") ? email.split("@")[0] : email;
+
+    setSettings((prev) => ({
+      ...prev,
+      adminAccounts: [
+        ...prev.adminAccounts,
+        {
+          name: nameFromEmail.replace(/\./g, " "),
+          role: newAdminRole,
+          email,
+          phone: newAdminPhone.trim(),
+          status: "pending",
+          lastLogin: "Belum pernah masuk",
+        },
+      ],
+    }));
+    setNewAdminEmail("");
+    setNewAdminPhone("");
+    setNewAdminRole("Staff");
+    setAdminInviteError(null);
+    setSaveMessage("Undangan admin baru tersimpan.");
+    window.setTimeout(() => setSaveMessage(null), 2600);
+  };
+
+  const handleRemoveAdmin = (email: string) => {
+    setSettings((prev) => {
+      if (prev.adminAccounts.length <= 1) {
+        return prev;
+      }
+      const nextAccounts = prev.adminAccounts.filter((account) => account.email !== email);
+      if (nextAccounts.length === prev.adminAccounts.length) {
+        return prev;
+      }
+      return {
+        ...prev,
+        adminAccounts: nextAccounts,
+      };
+    });
+  };
+
+  const handleSaveSettings = () => {
+    setSaveMessage("Pengaturan tersimpan.");
+    window.setTimeout(() => setSaveMessage(null), 2600);
+  };
+
+  const handleResetSettings = () => {
+    const defaults = createDefaultSettings();
+    setSettings(defaults);
+    setSaveMessage("Pengaturan dikembalikan ke pengaturan awal.");
+    window.setTimeout(() => setSaveMessage(null), 2600);
+  };
 
   useEffect(() => {
     if (!isAdmin) {
       router.replace("/login");
     }
   }, [isAdmin, router]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    if (settingsHydratedRef.current) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+      let resolvedSettings: AdminSettings;
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<AdminSettings>;
+        resolvedSettings = mergeStoredSettings(parsed);
+      } else {
+        resolvedSettings = createDefaultSettings();
+        window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(resolvedSettings));
+      }
+      settingsHydratedRef.current = true;
+      setSettings(resolvedSettings);
+    } catch (error) {
+      console.error("Failed to bootstrap settings", error);
+      const fallback = createDefaultSettings();
+      settingsHydratedRef.current = true;
+      setSettings(fallback);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    if (!settingsHydratedRef.current) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (error) {
+      console.error("Failed to persist settings", error);
+    }
+  }, [isAdmin, settings]);
+
+  useEffect(() => {
+    setPreviewSummary(computePreviewSummary(backupRange, customRangeStart, customRangeEnd));
+  }, [backupRange, customRangeStart, customRangeEnd]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -295,6 +898,10 @@ export default function AdminPage() {
       return next;
     });
   };
+
+  const isCustomRangeIncomplete =
+    backupRange === "custom" && (!customRangeStart || !customRangeEnd);
+  const downloadDisabled = isExportingBackup || isCustomRangeIncomplete;
 
   if (!isAdmin) {
     return null;
@@ -610,12 +1217,798 @@ export default function AdminPage() {
             </section>
           ) : null}
 
+
           {activeKey === "settings" ? (
-            <section className="space-y-3">
-              <h2 className="text-xl font-semibold text-gray-700">Pengaturan</h2>
-              <p className="text-sm text-gray-500">
-                Halaman pengaturan untuk mengelola informasi toko, jadwal, dan akun admin.
-              </p>
+            <section className="space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Panel Pengaturan</p>
+                <h2 className="text-xl font-semibold text-gray-700">Pengaturan Utama</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Pilih kategori di bawah untuk mengelola jadwal, pembayaran, notifikasi, akses, atau backup.
+                </p>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+                <aside className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-3 space-y-2">
+                  {SETTINGS_SECTIONS.map((section) => {
+                    const isSelected = section.key === activeSettingsSection;
+                    return (
+                      <button
+                        key={section.key}
+                        type="button"
+                        onClick={() => setActiveSettingsSection(section.key)}
+                        className={`flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition ${
+                          isSelected
+                            ? "bg-emerald-500 text-white shadow-lg"
+                            : "text-gray-600 hover:bg-emerald-50"
+                        }`}
+                      >
+                        <span
+                          className={`material-symbols-outlined text-base ${
+                            isSelected ? "text-white" : "text-emerald-500"
+                          }`}
+                        >
+                          {section.icon}
+                        </span>
+                        <div className="space-y-1">
+                          <p className={`text-sm font-semibold ${isSelected ? "text-white" : "text-gray-700"}`}>
+                            {section.label}
+                          </p>
+                          <p className={`text-xs leading-snug ${isSelected ? "text-white/80" : "text-gray-400"}`}>
+                            {section.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </aside>
+
+                <div className="space-y-6">
+                  {saveMessage ? (
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm font-semibold text-emerald-600 shadow-sm">
+                      {saveMessage}
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "store" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Informasi Toko</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Profil & Kontak</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Perbarui identitas toko yang tampil di menu digital dan struk pembayaran.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">storefront</span>
+                      </div>
+                      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                        <div className="space-y-2">
+                          <label htmlFor="store-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Nama Toko
+                          </label>
+                          <input
+                            id="store-name"
+                            name="name"
+                            type="text"
+                            value={settings.store.name}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="Contoh: SPM Café"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="store-tagline" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Tagline
+                          </label>
+                          <input
+                            id="store-tagline"
+                            name="tagline"
+                            type="text"
+                            value={settings.store.tagline}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="Cita rasa lokal, suasana nyaman."
+                          />
+                        </div>
+                        <div className="space-y-2 lg:col-span-2">
+                          <label htmlFor="store-description" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Deskripsi Singkat
+                          </label>
+                          <textarea
+                            id="store-description"
+                            name="description"
+                            value={settings.store.description}
+                            onChange={handleStoreFieldChange}
+                            rows={3}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="Ceritakan konsep café dan layanan unggulan Anda."
+                          />
+                        </div>
+                        <div className="space-y-2 lg:col-span-2">
+                          <label htmlFor="store-address" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Alamat Lengkap
+                          </label>
+                          <textarea
+                            id="store-address"
+                            name="address"
+                            value={settings.store.address}
+                            onChange={handleStoreFieldChange}
+                            rows={2}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="Tuliskan alamat lengkap untuk memudahkan kurir dan pelanggan."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="store-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Nomor WhatsApp
+                          </label>
+                          <input
+                            id="store-phone"
+                            name="phone"
+                            type="tel"
+                            value={settings.store.phone}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="+62 ..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="store-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Email Operasional
+                          </label>
+                          <input
+                            id="store-email"
+                            name="email"
+                            type="email"
+                            value={settings.store.email}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="admin@spmcafe.com"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="store-instagram" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Instagram
+                          </label>
+                          <input
+                            id="store-instagram"
+                            name="instagram"
+                            type="text"
+                            value={settings.store.instagram}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="@spmcafe"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="store-wifi" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Nama Wi-Fi
+                          </label>
+                          <input
+                            id="store-wifi"
+                            name="wifiName"
+                            type="text"
+                            value={settings.store.wifiName}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="SPM-Cafe"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="store-wifi-password" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Password Wi-Fi
+                          </label>
+                          <input
+                            id="store-wifi-password"
+                            name="wifiPassword"
+                            type="text"
+                            value={settings.store.wifiPassword}
+                            onChange={handleStoreFieldChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            placeholder="*******"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "hours" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Jam Operasional</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Jadwal Layanan</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Atur jam buka harian agar pesanan online mengikuti waktu operasional Anda.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">schedule</span>
+                      </div>
+                      <div className="mt-6 grid gap-3">
+                        {settings.hours.map((entry, index) => (
+                          <div
+                            key={entry.day}
+                            className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold text-gray-700">{entry.day}</p>
+                              <p className="text-xs text-gray-500">
+                                {entry.closed ? "Tutup sepanjang hari" : "Atur jam operasional"}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                  checked={entry.closed}
+                                  onChange={(event) => handleHourChange(index, "closed", event.target.checked)}
+                                />
+                                Tutup
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="time"
+                                  value={entry.open}
+                                  disabled={entry.closed}
+                                  onChange={(event) => handleHourChange(index, "open", event.target.value)}
+                                  className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:text-gray-400"
+                                />
+                                <span className="text-xs text-gray-400">s/d</span>
+                                <input
+                                  type="time"
+                                  value={entry.close}
+                                  disabled={entry.closed}
+                                  onChange={(event) => handleHourChange(index, "close", event.target.value)}
+                                  className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:text-gray-400"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "payment" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pembayaran</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Metode & Biaya</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Kelola preferensi pembayaran agar kasir dan pelanggan lebih terarah.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">credit_card</span>
+                      </div>
+                      <div className="mt-6 space-y-4">
+                        <div className="grid gap-3">
+                          <div className="space-y-2">
+                            <label htmlFor="payment-qris-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Nama Merchant QRIS
+                            </label>
+                            <input
+                              id="payment-qris-name"
+                              type="text"
+                              value={settings.payment.qrisMerchantName}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  payment: { ...prev.payment, qrisMerchantName: event.target.value },
+                                }))
+                              }
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="payment-qris-id" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              ID Merchant / QRIS
+                            </label>
+                            <input
+                              id="payment-qris-id"
+                              type="text"
+                              value={settings.payment.qrisId}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  payment: { ...prev.payment, qrisId: event.target.value },
+                                }))
+                              }
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="payment-bank-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Nama Bank
+                            </label>
+                            <input
+                              id="payment-bank-name"
+                              type="text"
+                              value={settings.payment.bankName}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  payment: { ...prev.payment, bankName: event.target.value },
+                                }))
+                              }
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="payment-bank-account" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Nomor Rekening
+                            </label>
+                            <input
+                              id="payment-bank-account"
+                              type="text"
+                              value={settings.payment.bankAccountNumber}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  payment: { ...prev.payment, bankAccountNumber: event.target.value },
+                                }))
+                              }
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {[
+                            { field: "cashEnabled" as const, label: "Terima Tunai" },
+                            { field: "cardEnabled" as const, label: "Terima Kartu/Debit" },
+                            { field: "autoConfirmQris" as const, label: "Otomatis Konfirmasi QRIS" },
+                          ].map((item) => (
+                            <label
+                              key={item.field}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 text-sm text-gray-600"
+                            >
+                              {item.label}
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                checked={settings.payment[item.field]}
+                                onChange={() => togglePaymentField(item.field)}
+                              />
+                            </label>
+                          ))}
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <label htmlFor="payment-service-charge" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Service Charge (%)
+                            </label>
+                            <input
+                              id="payment-service-charge"
+                              type="number"
+                              min={0}
+                              value={settings.payment.serviceCharge}
+                              onChange={(event) => handlePaymentNumberChange("serviceCharge", event)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="payment-tax-rate" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Pajak (%)
+                            </label>
+                            <input
+                              id="payment-tax-rate"
+                              type="number"
+                              min={0}
+                              value={settings.payment.taxRate}
+                              onChange={(event) => handlePaymentNumberChange("taxRate", event)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "notifications" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Notifikasi</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Pemberitahuan & Laporan</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Atur siapa yang menerima notifikasi pesanan dan ringkasan operasional.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">notifications_active</span>
+                      </div>
+
+                      <div className="mt-6 space-y-4">
+                        {[
+                          {
+                            field: "newOrder" as const,
+                            title: "Pesanan Baru",
+                            description: "Notifikasi real-time saat pesanan dari QRIS berhasil masuk.",
+                          },
+                          {
+                            field: "lowStock" as const,
+                            title: "Stok Hampir Habis",
+                            description: "Terima peringatan ketika stok bahan baku mencapai batas minimum.",
+                          },
+                          {
+                            field: "staffSchedule" as const,
+                            title: "Pengingat Jadwal Staff",
+                            description: "Kirim pengingat jadwal shift ke grup WhatsApp staff.",
+                          },
+                          {
+                            field: "sound" as const,
+                            title: "Bunyikan Bel",
+                            description: "Putar suara notifikasi di perangkat kasir untuk setiap order baru.",
+                          },
+                        ].map((item) => (
+                          <label
+                            key={item.field}
+                            className="flex items-start justify-between gap-4 rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold text-gray-700">{item.title}</p>
+                              <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              checked={settings.notifications[item.field]}
+                              onChange={() => handleNotificationToggle(item.field)}
+                            />
+                          </label>
+                        ))}
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <label htmlFor="notification-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Email Laporan
+                            </label>
+                            <input
+                              id="notification-email"
+                              name="email"
+                              type="email"
+                              value={settings.notifications.email}
+                              onChange={handleNotificationContactChange}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="notification-whatsapp" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Nomor WhatsApp
+                            </label>
+                            <input
+                              id="notification-whatsapp"
+                              name="whatsapp"
+                              type="tel"
+                              value={settings.notifications.whatsapp}
+                              onChange={handleNotificationContactChange}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          Email harian dikirim pukul 22.00 WIB · Pesan WhatsApp akan diteruskan otomatis.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "access" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Tim Admin</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Akses Pengguna</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Kelola siapa saja yang memiliki akses ke dashboard admin dan pantau aktivitasnya.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">group</span>
+                      </div>
+
+                      <div className="mt-6 space-y-4">
+                        {settings.adminAccounts.map((account) => (
+                          <div
+                            key={account.email}
+                            className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold text-gray-700">{account.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {account.email} {account.phone ? `· ${account.phone}` : ""}
+                              </p>
+                              <p className="text-xs text-gray-400">Terakhir aktif: {account.lastLogin}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-600">
+                                {account.role}
+                              </span>
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                  account.status === "active"
+                                    ? "bg-emerald-100 text-emerald-600 border border-emerald-100"
+                                    : "bg-amber-100 text-amber-600 border border-amber-100"
+                                }`}
+                              >
+                                {account.status === "active" ? "Aktif" : "Menunggu"}
+                              </span>
+                              {account.role !== "Pemilik" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAdmin(account.email)}
+                                  className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 transition"
+                                  aria-label={`Hapus admin ${account.name}`}
+                                >
+                                  Hapus
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-6 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 p-4">
+                        <p className="text-sm font-semibold text-gray-700">Undang Admin Baru</p>
+                        <p className="text-xs text-gray-500">
+                          Kirim undangan ke email untuk memberikan akses dashboard. Undangan berlaku 24 jam.
+                        </p>
+                        <form onSubmit={handleAddAdminAccount} className="mt-4 grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <label htmlFor="invite-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Email Admin
+                            </label>
+                            <input
+                              id="invite-email"
+                              type="email"
+                              value={newAdminEmail}
+                              onChange={(event) => setNewAdminEmail(event.target.value)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              placeholder="nama@perusahaan.com"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="invite-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Nomor WhatsApp (opsional)
+                            </label>
+                            <input
+                              id="invite-phone"
+                              type="tel"
+                              value={newAdminPhone}
+                              onChange={(event) => setNewAdminPhone(event.target.value)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              placeholder="+62 ..."
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="invite-role" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Peran
+                            </label>
+                            <select
+                              id="invite-role"
+                              value={newAdminRole}
+                              onChange={(event) =>
+                                setNewAdminRole(event.target.value as (typeof ADMIN_ROLE_OPTIONS)[number])
+                              }
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            >
+                              {ADMIN_ROLE_OPTIONS.map((role) => (
+                                <option key={role} value={role}>
+                                  {role}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-end">
+                            <button
+                              type="submit"
+                              className="w-full rounded-full bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
+                            >
+                              Kirim Undangan
+                            </button>
+                          </div>
+                          {adminInviteError ? (
+                            <p className="md:col-span-2 text-xs font-semibold text-red-500">{adminInviteError}</p>
+                          ) : (
+                            <p className="md:col-span-2 text-xs text-gray-400">
+                              Admin baru akan diminta membuat kata sandi ketika menerima undangan.
+                            </p>
+                          )}
+                        </form>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "backup" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6 space-y-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pusat Backup</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Ekspor Laporan Penjualan</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Pilih rentang waktu dan format laporan, lalu unduh file secara instan.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">cloud_download</span>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label htmlFor="backup-range" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Rentang Waktu
+                          </label>
+                          <select
+                            id="backup-range"
+                            value={backupRange}
+                            onChange={handleBackupRangeChange}
+                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                          >
+                            {BACKUP_RANGE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          {isCustomRangeIncomplete ? (
+                            <p className="text-xs text-amber-500">
+                              Lengkapi tanggal mulai dan akhir sebelum mengunduh.
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Format File</p>
+                          <div className="flex flex-wrap gap-3">
+                            {[
+                              {
+                                key: "csv" as const,
+                                label: "CSV",
+                                caption: "Spreadsheet (.csv) untuk analisis detail",
+                              },
+                              {
+                                key: "pdf" as const,
+                                label: "PDF",
+                                caption: "Ringkasan siap cetak (.pdf)",
+                              },
+                            ].map((option) => {
+                              const checked = selectedExportFormats[option.key];
+                              return (
+                                <label key={option.key} className="cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="sr-only"
+                                    checked={checked}
+                                    onChange={() => toggleExportFormat(option.key)}
+                                  />
+                                  <div
+                                    className={`rounded-xl border px-4 py-3 shadow-sm transition ${
+                                      checked
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-100"
+                                        : "border-emerald-100 bg-white text-gray-600 hover:border-emerald-200"
+                                    }`}
+                                  >
+                                    <p className="text-sm font-semibold">{option.label}</p>
+                                    <p className="text-xs text-gray-400">{option.caption}</p>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-gray-400">Pilih minimal satu format laporan.</p>
+                        </div>
+                      </div>
+
+                      {backupRange === "custom" ? (
+                        <div className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <label htmlFor="backup-custom-start" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Dari Tanggal
+                            </label>
+                            <input
+                              id="backup-custom-start"
+                              type="date"
+                              value={customRangeStart}
+                              max={customRangeEnd || undefined}
+                              onChange={(event) => handleCustomRangeChange("start", event.target.value)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="backup-custom-end" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Hingga Tanggal
+                            </label>
+                            <input
+                              id="backup-custom-end"
+                              type="date"
+                              value={customRangeEnd}
+                              min={customRangeStart || undefined}
+                              onChange={(event) => handleCustomRangeChange("end", event.target.value)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                          </div>
+                          <p className="sm:col-span-2 text-xs text-gray-400">
+                            Untuk performa terbaik, gunakan rentang maksimal 90 hari.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pratinjau</p>
+                        <h4 className="text-sm font-semibold text-gray-700 mt-1">Ringkasan Periode</h4>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Periode: <span className="font-semibold text-gray-700">{previewSummary.periodLabel}</span>
+                        </p>
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                          <div className="rounded-xl border border-emerald-100 bg-white/70 p-4">
+                            <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Total Transaksi</p>
+                            <p className="mt-2 text-lg font-semibold text-gray-700">
+                              {formatNumberID(previewSummary.totalOrders)}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-emerald-100 bg-white/70 p-4">
+                            <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Total Penjualan</p>
+                            <p className="mt-2 text-lg font-semibold text-emerald-600">
+                              {formatCurrencyIDR(previewSummary.totalRevenue)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-xs text-gray-500">
+                          {isExportingBackup
+                            ? "Menyiapkan laporan, mohon tunggu sebentar…"
+                            : "Tekan tombol unduh untuk menghasilkan laporan."}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleExportSalesBackup}
+                          disabled={downloadDisabled}
+                          className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {isExportingBackup ? (
+                            <>
+                              <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                              Menyiapkan…
+                            </>
+                          ) : (
+                            <>
+                              <span className="material-symbols-outlined text-base">download</span>
+                              Unduh Laporan
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection !== "backup" ? (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-gray-400">
+                        Perubahan disimpan otomatis di perangkat ini. Klik simpan untuk menandai konfigurasi final.
+                      </p>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={handleResetSettings}
+                          className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                        >
+                          Reset ke Default
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveSettings}
+                          className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600 transition"
+                        >
+                          Simpan Perubahan
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </section>
           ) : null}
         </main>
