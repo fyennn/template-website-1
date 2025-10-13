@@ -107,7 +107,11 @@ export default function QrisPaymentPage() {
       const orderItems = lines.map((line) => ({
         name: line.product.name,
         quantity: line.quantity,
+        unitPrice: line.product.price,
+        unitPriceLabel: line.product.priceLabel,
         linePriceLabel: line.lineTotalLabel,
+        category: line.product.category,
+        image: line.product.image,
         options: line.options.map((option) => {
           if (option.priceDelta) {
             const formatted = formatCurrency(option.priceDelta).replace("Rp", "Rp");
@@ -120,11 +124,37 @@ export default function QrisPaymentPage() {
       const order = {
         id: orderId,
         createdAt,
+        updatedAt: createdAt,
         tableId: tableId ?? null,
+        customerInfo: (() => {
+          if (typeof window !== "undefined") {
+            const saved = localStorage.getItem("spm-customer-info");
+            if (saved) {
+              try {
+                return JSON.parse(saved);
+              } catch (error) {
+                console.error("Failed to parse customer info", error);
+              }
+            }
+          }
+          return {
+            name: "Customer",
+            phone: "",
+            email: "",
+            notes: ""
+          };
+        })(),
+        subtotal: summary.subtotal,
         subtotalLabel: summary.subtotalLabel,
+        tax: summary.tax,
         taxLabel: summary.taxLabel,
+        total: summary.total,
         totalLabel: summary.totalLabel,
-        status: "pending",
+        status: "pending" as const,
+        paymentMethod: "qris" as const,
+        paymentStatus: "pending" as const,
+        estimatedTime: 15, // 15 menit estimasi
+        notes: "",
         items: orderItems,
       };
       addOrder(order);

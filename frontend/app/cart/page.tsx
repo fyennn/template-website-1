@@ -290,7 +290,7 @@ export default function CartPage() {
           <button
             type="button"
             className="cart-checkout-button w-full px-5 py-3 text-sm font-semibold text-white transition"
-            onClick={() => router.push("/payment/qris")}
+            onClick={() => router.push("/checkout")}
           >
             Pesan Sekarang
           </button>

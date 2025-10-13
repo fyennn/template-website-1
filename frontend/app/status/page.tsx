@@ -79,13 +79,35 @@ export default function OrderStatusPage() {
                 className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
                   order.status === "served"
                     ? "bg-emerald-100 text-emerald-600 border border-emerald-200"
-                    : "bg-amber-100 text-amber-600 border border-amber-200"
+                    : order.status === "ready"
+                    ? "bg-green-100 text-green-600 border border-green-200"
+                    : order.status === "preparing"
+                    ? "bg-blue-100 text-blue-600 border border-blue-200"
+                    : order.status === "cancelled"
+                    ? "bg-red-100 text-red-600 border border-red-200"
+                    : "bg-yellow-100 text-yellow-600 border border-yellow-200"
                 }`}
               >
                 <span className="material-symbols-outlined text-sm">
-                  {order.status === "served" ? "check_circle" : "hourglass_top"}
+                  {order.status === "served" 
+                    ? "delivery_dining" 
+                    : order.status === "ready"
+                    ? "check_circle"
+                    : order.status === "preparing"
+                    ? "cooking"
+                    : order.status === "cancelled"
+                    ? "cancel"
+                    : "receipt"}
                 </span>
-                {order.status === "served" ? "Sedang Diantar" : "Menunggu Diproses"}
+                {order.status === "served" 
+                  ? "Pesanan Sudah Diantar" 
+                  : order.status === "ready"
+                  ? "Pesanan Siap Diambil"
+                  : order.status === "preparing"
+                  ? "Pesananmu Sedang Dibuatkan"
+                  : order.status === "cancelled"
+                  ? "Pesanan Dibatalkan"
+                  : "Pesanan Diterima"}
               </span>
             </div>
           </div>
@@ -130,7 +152,19 @@ export default function OrderStatusPage() {
             </div>
             <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-xs text-gray-500">
               <p className="font-semibold text-gray-700">Apa selanjutnya?</p>
-              <p>Barista kami sedang menyiapkan pesananmu. Silakan tunggu di meja {order.tableId ?? "pickup"}.</p>
+              <p>
+                {order.status === "pending" 
+                  ? `Pesananmu sudah diterima dan akan segera diproses. Silakan tunggu di meja ${order.tableId ?? "area pickup"}.`
+                  : order.status === "preparing"
+                  ? `Barista kami sedang menyiapkan pesananmu dengan penuh perhatian. Silakan tunggu di meja ${order.tableId ?? "area pickup"}.`
+                  : order.status === "ready"
+                  ? `Pesananmu sudah siap! Silakan ambil di counter atau tunggu staff kami mengantarkan ke meja ${order.tableId ?? "area pickup"}.`
+                  : order.status === "served"
+                  ? "Pesananmu sudah diantar. Selamat menikmati! Jangan lupa berikan feedback untuk pelayanan kami."
+                  : order.status === "cancelled"
+                  ? "Pesanan ini telah dibatalkan. Jika ada pertanyaan, silakan hubungi staff kami."
+                  : `Pesananmu sedang dalam antrian. Silakan tunggu di meja ${order.tableId ?? "area pickup"}.`}
+              </p>
             </div>
           </div>
         </section>

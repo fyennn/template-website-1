@@ -10,6 +10,7 @@ import { Header } from "@/components/Header";
 import { CategoryPills } from "@/components/CategoryPills";
 import { CartFab } from "@/components/CartFab";
 import { ProductCard } from "@/components/ProductCard";
+import { OrderStatusBanner } from "@/components/OrderStatusBanner";
 import { useCart } from "@/lib/cartStore";
 
 type MenuSection = {
@@ -290,6 +291,8 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
             }}
           />
         </div>
+
+        <OrderStatusBanner />
 
         {tableAvailabilityChecked && (!currentTableSlug || !tableActive) ? (
           <div className="p-6 pb-24 flex items-center justify-center min-h-[60vh]">

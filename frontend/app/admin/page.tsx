@@ -38,6 +38,15 @@ type OrderListSectionProps = {
 const TABLES_STORAGE_KEY = "spm-admin-tables";
 const SETTINGS_STORAGE_KEY = "spm-admin-settings";
 
+type AdminAccount = {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  status: "active" | "pending" | "inactive";
+  lastLogin: string;
+};
+
 type AdminSettings = {
   store: {
     name: string;
@@ -60,6 +69,7 @@ type AdminSettings = {
     qrisMerchantName: string;
     qrisId: string;
     bankName: string;
+    bankAccountName: string;
     bankAccountNumber: string;
     cashEnabled: boolean;
     cardEnabled: boolean;
@@ -74,15 +84,11 @@ type AdminSettings = {
     email: string;
     whatsapp: string;
     sound: boolean;
+    lowStockThreshold: number;
+    staffScheduleReminderTime: number;
+    staffScheduleGroupLink: string;
   };
-  adminAccounts: Array<{
-    name: string;
-    role: string;
-    email: string;
-    phone: string;
-    status: "active" | "pending";
-    lastLogin: string;
-  }>;
+  adminAccounts: Array<AdminAccount>;
 };
 
 const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
@@ -110,7 +116,8 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   payment: {
     qrisMerchantName: "SPM Café",
     qrisId: "00020101021234567890",
-    bankName: "Bank Contoh",
+    bankName: "BCA",
+    bankAccountName: "SPM Café",
     bankAccountNumber: "1234567890",
     cashEnabled: true,
     cardEnabled: true,
@@ -125,6 +132,9 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
     email: "admin@spmcafe.com",
     whatsapp: "+62 812-1234-5678",
     sound: true,
+    lowStockThreshold: 500,
+    staffScheduleReminderTime: 1,
+    staffScheduleGroupLink: "",
   },
   adminAccounts: [
     {
@@ -177,7 +187,7 @@ function mergeStoredSettings(stored: Partial<AdminSettings> | null | undefined):
     stored.adminAccounts && stored.adminAccounts.length > 0
       ? stored.adminAccounts.map((account) => ({
           ...account,
-          status: account.status === "pending" ? "pending" : "active",
+          status: account.status || "inactive",
         }))
       : DEFAULT_ADMIN_SETTINGS.adminAccounts.map((entry) => ({ ...entry }));
 
@@ -191,6 +201,12 @@ function mergeStoredSettings(stored: Partial<AdminSettings> | null | undefined):
 }
 
 const ADMIN_ROLE_OPTIONS = ["Pemilik", "Manager", "Supervisor", "Staff"] as const;
+const ROLE_DESCRIPTIONS: Record<typeof ADMIN_ROLE_OPTIONS[number], string> = {
+    Pemilik: "Akses penuh ke semua pengaturan dan data. Hanya bisa diatur oleh pemilik lain.",
+    Manager: "Bisa mengelola produk, pesanan, dan meja, serta melihat laporan penjualan.",
+    Supervisor: "Bisa mengelola pesanan dan meja, serta membantu staff.",
+    Staff: "Hanya bisa melihat pesanan yang masuk dan menandainya sebagai selesai.",
+};
 
 type SettingsSectionKey =
   | "store"
@@ -200,6 +216,15 @@ type SettingsSectionKey =
   | "access"
   | "backup";
 
+type BackupRangeValue = "7d" | "30d" | "90d" | "custom";
+
+const BACKUP_RANGE_OPTIONS: Array<{ value: BackupRangeValue; label: string }> = [
+  { value: "7d", label: "7 Hari Terakhir" },
+  { value: "30d", label: "30 Hari Terakhir" },
+  { value: "90d", label: "90 Hari Terakhir" },
+  { value: "custom", label: "Rentang Kustom" },
+];
+
 const SETTINGS_SECTIONS: Array<{
   key: SettingsSectionKey;
   label: string;
@@ -208,76 +233,68 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   {
     key: "store",
-    label: "Profil Toko",
-    description: "Identitas café dan kontak utama.",
+    label: "Informasi Toko",
+    description: "Profil & kontak bisnis Anda",
     icon: "storefront",
   },
   {
     key: "hours",
-    label: "Jadwal Layanan",
-    description: "Jam buka dan status operasional.",
+    label: "Jam Operasional",
+    description: "Atur jadwal buka toko",
     icon: "schedule",
   },
   {
     key: "payment",
     label: "Pembayaran",
-    description: "Metode, biaya layanan, dan pajak.",
+    description: "Metode & biaya transaksi",
     icon: "credit_card",
   },
   {
     key: "notifications",
     label: "Notifikasi",
-    description: "Pengaturan pemberitahuan dan penerima.",
+    description: "Pengaturan pemberitahuan",
     icon: "notifications_active",
   },
   {
     key: "access",
     label: "Akses Pengguna",
-    description: "Daftar admin dan undangan baru.",
+    description: "Kelola tim admin",
     icon: "group",
   },
   {
     key: "backup",
-    label: "Pusat Backup",
-    description: "Ekspor laporan penjualan berkala.",
+    label: "Backup & Ekspor",
+    description: "Unduh laporan penjualan",
     icon: "cloud_download",
   },
 ];
 
-type BackupRangeValue = "today" | "7d" | "14d" | "30d" | "this-month" | "last-month" | "custom";
-
-const BACKUP_RANGE_OPTIONS: Array<{ value: BackupRangeValue; label: string }> = [
-  { value: "today", label: "Hari ini" },
-  { value: "7d", label: "7 hari terakhir" },
-  { value: "14d", label: "14 hari terakhir" },
-  { value: "30d", label: "30 hari terakhir" },
-  { value: "this-month", label: "Bulan ini" },
-  { value: "last-month", label: "Bulan lalu" },
-  { value: "custom", label: "Rentang tanggal kustom" },
+// Daftar bank umum di Indonesia untuk dropdown
+const BANK_OPTIONS: string[] = [
+  "BCA",
+  "Mandiri",
+  "BRI",
+  "BNI",
+  "CIMB Niaga",
+  "Permata",
+  "Danamon",
+  "BTN",
+  "BSI",
+  "OCBC NISP",
+  "Maybank",
+  "BJB",
+  "Bank Jatim",
+  "Bank Jateng",
+  "Bank Mega",
+  "Jago",
+  "SeaBank",
+  "Neo Commerce",
+  "Allo Bank",
 ];
 
-function backupRangeLabel(value: BackupRangeValue) {
-  const found = BACKUP_RANGE_OPTIONS.find((option) => option.value === value);
-  return found ? found.label : value;
-}
-
-function parseDateInput(value: string): Date | null {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function calculateDaysBetween(start?: string, end?: string): number | null {
-  const startDate = parseDateInput(start ?? "");
-  const endDate = parseDateInput(end ?? "");
-  if (!startDate || !endDate) {
-    return null;
-  }
-  const diff = Math.abs(endDate.getTime() - startDate.getTime());
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
-  return Number.isFinite(days) ? Math.max(days, 1) : null;
+function backupRangeLabel(value: BackupRangeValue): string {
+  const option = BACKUP_RANGE_OPTIONS.find((opt) => opt.value === value);
+  return option ? option.label : "7 Hari Terakhir";
 }
 
 function computePreviewSummary(
@@ -285,215 +302,148 @@ function computePreviewSummary(
   customStart: string,
   customEnd: string
 ): { totalOrders: number; totalRevenue: number; periodLabel: string } {
-  const today = new Date();
-  let days = 7;
-  let periodLabel = backupRangeLabel(range);
+  // This is demo data - in production, this would fetch from backend
+  const dummyData: Record<BackupRangeValue, { orders: number; revenue: number }> = {
+    "7d": { orders: 156, revenue: 12450000 },
+    "30d": { orders: 687, revenue: 54320000 },
+    "90d": { orders: 2134, revenue: 167890000 },
+    custom: { orders: 0, revenue: 0 },
+  };
 
-  switch (range) {
-    case "today":
-      days = 1;
-      break;
-    case "7d":
-      days = 7;
-      break;
-    case "14d":
-      days = 14;
-      break;
-    case "30d":
-      days = 30;
-      break;
-    case "this-month": {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      const diff = Math.floor((today.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      days = Math.max(diff, 1);
-      break;
-    }
-    case "last-month": {
-      const firstLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const lastDayLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-      const diff =
-        Math.floor(
-          (lastDayLastMonth.getTime() - firstLastMonth.getTime()) / (1000 * 60 * 60 * 24)
-        ) + 1;
-      days = Math.max(diff, 1);
-      break;
-    }
-    case "custom": {
-      const diff = calculateDaysBetween(customStart, customEnd);
-      if (diff) {
-        days = diff;
-        periodLabel =
-          customStart && customEnd
-            ? `${customStart} – ${customEnd}`
-            : "Rentang tanggal kustom";
-      } else {
-        days = 3;
-        periodLabel = "Rentang tanggal kustom";
-      }
-      break;
-    }
-    default:
-      days = 7;
-      break;
+  const data = dummyData[range] || dummyData["7d"];
+  
+  let periodLabel = backupRangeLabel(range);
+  if (range === "custom" && customStart && customEnd) {
+    periodLabel = `${customStart} hingga ${customEnd}`;
+    // For custom range, estimate based on date difference
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const avgPerDay = dummyData["7d"].orders / 7;
+    data.orders = Math.round(avgPerDay * days);
+    data.revenue = Math.round((dummyData["7d"].revenue / 7) * days);
   }
 
-  const estimatedOrders = Math.max(15, Math.round(days * 4.8));
-  const averageTicket = 55000;
-  const totalRevenue = estimatedOrders * averageTicket;
-
   return {
-    totalOrders: estimatedOrders,
-    totalRevenue,
+    totalOrders: data.orders,
+    totalRevenue: data.revenue,
     periodLabel,
   };
 }
 
-function formatCurrencyIDR(value: number) {
+function formatNumberID(num: number): string {
+  return new Intl.NumberFormat("id-ID").format(num);
+}
+
+function formatCurrencyIDR(amount: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
+    minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(amount);
 }
 
-function formatNumberID(value: number) {
-  return new Intl.NumberFormat("id-ID").format(value);
+function formatTableCode(index: number): string {
+  return `M-${index.toString().padStart(2, "0")}`;
 }
 
-function OrderListSection({ title, description, orders, onMarkServed, actionLabel }: OrderListSectionProps) {
-  const [expanded, setExpanded] = useState(true);
-  if (orders.length === 0) {
-    return (
-      <section className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6 text-sm text-gray-500">
-        <p className="font-semibold text-gray-600">{title}</p>
-        <p className="mt-1">{description}</p>
-        <p className="mt-3 text-xs text-gray-400">Belum ada pesanan pada kategorinya.</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="rounded-2xl border border-emerald-100 bg-white/75 shadow-sm">
-      <button
-        type="button"
-        className="w-full px-5 py-4 flex items-center justify-between text-left"
-        onClick={() => setExpanded((prev) => !prev)}
-      >
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">{title}</p>
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
-        </div>
-        <span className="material-symbols-outlined text-emerald-500">
-          {expanded ? "expand_less" : "expand_more"}
-        </span>
-      </button>
-      {expanded ? (
-        <div className="space-y-4 px-5 pb-5">
-          {orders.map((order) => (
-            <div
-              key={order.id}
-              className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-5 space-y-4"
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Order ID</p>
-                  <p className="text-sm font-semibold text-gray-700">{order.id}</p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(order.createdAt).toLocaleString("id-ID", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">Meja</p>
-                  <p className="text-sm font-semibold text-emerald-600">
-                    {order.tableId ?? "Take Away"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-emerald-50 bg-emerald-50/60 p-4">
-                <div className="grid gap-2 text-sm text-gray-600">
-                  {order.items.map((item) => (
-                    <div key={`${order.id}-${item.name}`} className="flex justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-700">
-                          {item.name} <span className="text-xs text-gray-500">x{item.quantity}</span>
-                        </p>
-                        {item.options.length > 0 ? (
-                          <ul className="text-xs text-gray-500 list-disc ml-4">
-                            {item.options.map((opt, index) => (
-                              <li key={index}>{opt}</li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </div>
-                      <span className="font-semibold text-gray-700">{item.linePriceLabel}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="text-sm text-gray-500 space-y-1">
-                  <div className="flex gap-4">
-                    <span>Subtotal</span>
-                    <span className="font-semibold text-gray-700">{order.subtotalLabel}</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <span>Pajak</span>
-                    <span className="font-semibold text-gray-700">{order.taxLabel}</span>
-                  </div>
-                  <div className="flex gap-4 text-emerald-600 font-semibold">
-                    <span>Total</span>
-                    <span>{order.totalLabel}</span>
-                  </div>
-                </div>
-
-                {onMarkServed ? (
-                  <button
-                    type="button"
-                    onClick={() => onMarkServed(order.id)}
-                    className="rounded-full bg-emerald-500 text-white px-4 py-2 text-xs font-semibold shadow hover:bg-emerald-600 transition"
-                  >
-                    {actionLabel}
-                  </button>
-                ) : (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-600">
-                    {actionLabel}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
+function formatTableName(index: number): string {
+  return `Meja ${index.toString().padStart(2, "0")}`;
 }
 
-async function generateTableEntry(index: number, origin: string): Promise<TableEntry> {
-  const padded = index.toString().padStart(2, "0");
-  const slug = `meja-${padded}`;
-  const safeOrigin = origin || "https://spm-cafe.local";
-  const url = `${safeOrigin}/menu?table=${slug}`;
+async function generateTableEntry(index: number, origin: string, active = true): Promise<TableEntry> {
+  const slug = formatTableCode(index);
+  const url = `${origin}/menu?table=${slug}`;
   const qrDataUrl = await QRCode.toDataURL(url, {
-    width: 320,
-    margin: 1,
+    width: 300,
+    margin: 2,
     color: {
-      dark: "#0f766e",
+      dark: "#059669",
       light: "#ffffff",
     },
   });
   return {
     id: index,
-    name: `Meja ${padded}`,
+    name: formatTableName(index),
     slug,
     url,
     qrDataUrl,
-    active: true,
+    active,
   };
+}
+
+function OrderListSection({
+  title,
+  description,
+  orders,
+  onMarkServed,
+  actionLabel,
+}: OrderListSectionProps) {
+  if (orders.length === 0) {
+    return (
+      <div className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6">
+        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">{title}</p>
+        <p className="text-sm text-gray-500 mt-2">{description}</p>
+        <p className="text-sm text-gray-400 mt-4">Belum ada pesanan dalam kategori ini.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-emerald-100 bg-white/70 shadow-sm p-6 space-y-4">
+      <div>
+        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">{title}</p>
+        <p className="text-sm text-gray-500 mt-1">{description}</p>
+      </div>
+      <div className="space-y-3">
+        {orders.map((order) => (
+          <div
+            key={order.id}
+            className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">
+                  Pesanan #{order.id.slice(0, 8)}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {order.tableId || "Tanpa meja"} · {new Date(order.createdAt).toLocaleString('id-ID', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </p>
+              </div>
+              <span className="text-sm font-semibold text-emerald-600">
+                {order.totalLabel}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {order.items.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">
+                    {item.quantity}x {item.name}
+                  </span>
+                  <span className="text-gray-500">{item.linePriceLabel}</span>
+                </div>
+              ))}
+            </div>
+            {onMarkServed && order.status !== "served" && (
+              <button
+                type="button"
+                onClick={() => onMarkServed(order.id)}
+                className="w-full rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600 transition"
+              >
+                {actionLabel}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function AdminPage() {
@@ -507,11 +457,20 @@ export default function AdminPage() {
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const [tableError, setTableError] = useState<string | null>(null);
   const [pendingToggleSlug, setPendingToggleSlug] = useState<string | null>(null);
+  const [pendingDeleteTable, setPendingDeleteTable] = useState<TableEntry | null>(null);
   const [settings, setSettings] = useState<AdminSettings>(() => createDefaultSettings());
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [showRoleInfo, setShowRoleInfo] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminAccount | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPhone, setNewAdminPhone] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<typeof ADMIN_ROLE_OPTIONS[number]>("Staff");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [savedSettings, setSavedSettings] = useState<AdminSettings | null>(null);
+  const [savedAdminAccounts, setSavedAdminAccounts] = useState<AdminAccount[]>([]);
+  const [pendingSave, setPendingSave] = useState(false);
   const [adminInviteError, setAdminInviteError] = useState<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionKey>("store");
@@ -533,6 +492,8 @@ export default function AdminPage() {
     periodLabel: backupRangeLabel("7d"),
   });
   const settingsHydratedRef = useRef(false);
+  const [showLowStockConfig, setShowLowStockConfig] = useState(false);
+  const [showStaffScheduleConfig, setShowStaffScheduleConfig] = useState(false);
 
   const handleStoreFieldChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
@@ -544,6 +505,7 @@ export default function AdminPage() {
         [field]: value,
       },
     }));
+    setIsDirty(true);
   };
 
   const handleHourChange = (index: number, field: "open" | "close" | "closed", value: string | boolean) => {
@@ -562,6 +524,7 @@ export default function AdminPage() {
         return { ...entry, close: value as string };
       }),
     }));
+    setIsDirty(true);
   };
 
   const togglePaymentField = (field: "cashEnabled" | "cardEnabled" | "autoConfirmQris") => {
@@ -572,6 +535,7 @@ export default function AdminPage() {
         [field]: !prev.payment[field],
       },
     }));
+    setIsDirty(true);
   };
 
   const handleBackupRangeChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -641,6 +605,7 @@ export default function AdminPage() {
         [field]: value,
       },
     }));
+    setIsDirty(true);
   };
 
   const handleNotificationToggle = (field: "newOrder" | "lowStock" | "staffSchedule" | "sound") => {
@@ -651,6 +616,7 @@ export default function AdminPage() {
         [field]: !prev.notifications[field],
       },
     }));
+    setIsDirty(true);
   };
 
   const handlePaymentNumberChange = (
@@ -658,7 +624,9 @@ export default function AdminPage() {
     event: ChangeEvent<HTMLInputElement>
   ) => {
     const parsedValue = Number(event.target.value);
-    const safeValue = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+    const safeValue = Number.isFinite(parsedValue)
+      ? Math.max(0, Math.min(100, parsedValue))
+      : 0;
     setSettings((prev) => ({
       ...prev,
       payment: {
@@ -666,6 +634,43 @@ export default function AdminPage() {
         [field]: safeValue,
       },
     }));
+    setIsDirty(true);
+  };
+
+  const handleLowStockThresholdChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(event.target.value, 10);
+    setSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        lowStockThreshold: isNaN(value) ? 0 : value,
+      },
+    }));
+    setIsDirty(true);
+  };
+
+  const handleStaffScheduleReminderTimeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(event.target.value, 10);
+    setSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        staffScheduleReminderTime: isNaN(value) ? 0 : value,
+      },
+    }));
+    setIsDirty(true);
+  };
+
+  const handleStaffScheduleGroupLinkChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { value } = event.target;
+    setSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        staffScheduleGroupLink: value,
+      },
+    }));
+    setIsDirty(true);
   };
 
   const handleAddAdminAccount = (event: FormEvent<HTMLFormElement>) => {
@@ -675,7 +680,7 @@ export default function AdminPage() {
       setAdminInviteError("Email wajib diisi sebelum mengundang admin baru.");
       return;
     }
-    const isDuplicate = settings.adminAccounts.some(
+    const isDuplicate = adminAccounts.some(
       (account) => account.email.toLowerCase() === email.toLowerCase()
     );
     if (isDuplicate) {
@@ -685,54 +690,59 @@ export default function AdminPage() {
 
     const nameFromEmail = email.includes("@") ? email.split("@")[0] : email;
 
-    setSettings((prev) => ({
-      ...prev,
-      adminAccounts: [
-        ...prev.adminAccounts,
-        {
-          name: nameFromEmail.replace(/\./g, " "),
-          role: newAdminRole,
-          email,
-          phone: newAdminPhone.trim(),
-          status: "pending",
-          lastLogin: "Belum pernah masuk",
-        },
-      ],
-    }));
+    const newAccount: AdminAccount = {
+      name: nameFromEmail.replace(/\./g, " "),
+      role: newAdminRole,
+      email,
+      phone: newAdminPhone.trim(),
+      status: "pending",
+      lastLogin: "Belum pernah masuk",
+    };
+    setIsDirty(true);
+    setAdminAccounts((prev) => [...prev, newAccount]);
     setNewAdminEmail("");
     setNewAdminPhone("");
     setNewAdminRole("Staff");
     setAdminInviteError(null);
-    setSaveMessage("Undangan admin baru tersimpan.");
+    setSaveMessage(`Undangan berhasil dikirim ke ${email}`);
     window.setTimeout(() => setSaveMessage(null), 2600);
   };
 
   const handleRemoveAdmin = (email: string) => {
-    setSettings((prev) => {
-      if (prev.adminAccounts.length <= 1) {
-        return prev;
-      }
-      const nextAccounts = prev.adminAccounts.filter((account) => account.email !== email);
-      if (nextAccounts.length === prev.adminAccounts.length) {
-        return prev;
-      }
-      return {
-        ...prev,
-        adminAccounts: nextAccounts,
-      };
-    });
+    setAdminAccounts((prev) => prev.filter((account) => account.email !== email));
+    setSaveMessage(`Pengguna dengan email ${email} telah dihapus.`);
+    window.setTimeout(() => setSaveMessage(null), 2600);
+    setIsDirty(true);
   };
 
-  const handleSaveSettings = () => {
-    setSaveMessage("Pengaturan tersimpan.");
+  const handleToggleUserStatus = (email: string) => {
+    setAdminAccounts(prev => prev.map(acc => {
+      if (acc.email === email) {
+        const newStatus = acc.status === 'active' ? 'inactive' : 'active';
+        setSaveMessage(`Status pengguna ${acc.name} diubah menjadi ${newStatus}.`);
+        window.setTimeout(() => setSaveMessage(null), 2600);
+        return {...acc, status: newStatus};
+      }
+      return acc;
+    }));
+    setIsDirty(true);
+  };
+  
+  const handleResendInvitation = (email: string) => {
+    setSaveMessage(`Undangan telah dikirim ulang ke ${email}.`);
     window.setTimeout(() => setSaveMessage(null), 2600);
   };
 
-  const handleResetSettings = () => {
-    const defaults = createDefaultSettings();
-    setSettings(defaults);
-    setSaveMessage("Pengaturan dikembalikan ke pengaturan awal.");
-    window.setTimeout(() => setSaveMessage(null), 2600);
+  const handleUpdateUserRole = (email: string, role: typeof ADMIN_ROLE_OPTIONS[number]) => {
+    setAdminAccounts(prev => prev.map(acc => {
+      if (acc.email === email) {
+        setSaveMessage(`Peran pengguna ${acc.name} diubah menjadi ${role}.`);
+        window.setTimeout(() => setSaveMessage(null), 2600);
+        return {...acc, role};
+      }
+      return acc;
+    }));
+    setIsDirty(true);
   };
 
   useEffect(() => {
@@ -764,30 +774,40 @@ export default function AdminPage() {
       }
       settingsHydratedRef.current = true;
       setSettings(resolvedSettings);
+      setAdminAccounts(resolvedSettings.adminAccounts);
+      setSavedSettings(resolvedSettings);
+      setSavedAdminAccounts(resolvedSettings.adminAccounts);
+      setIsDirty(false);
     } catch (error) {
       console.error("Failed to bootstrap settings", error);
       const fallback = createDefaultSettings();
       settingsHydratedRef.current = true;
       setSettings(fallback);
+      setAdminAccounts(fallback.adminAccounts);
+      setSavedSettings(fallback);
+      setSavedAdminAccounts(fallback.adminAccounts);
+      setIsDirty(false);
     }
   }, [isAdmin]);
 
+  // Persist only when user clicks Save
   useEffect(() => {
-    if (!isAdmin) {
-      return;
-    }
-    if (!settingsHydratedRef.current) {
-      return;
-    }
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (!pendingSave) return;
     try {
-      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...settings, adminAccounts }));
+      }
+      setSavedSettings(settings);
+      setSavedAdminAccounts(adminAccounts);
+      setIsDirty(false);
+      setSaveMessage("Perubahan disimpan.");
+      window.setTimeout(() => setSaveMessage(null), 2600);
     } catch (error) {
       console.error("Failed to persist settings", error);
+    } finally {
+      setPendingSave(false);
     }
-  }, [isAdmin, settings]);
+  }, [pendingSave, settings, adminAccounts]);
 
   useEffect(() => {
     setPreviewSummary(computePreviewSummary(backupRange, customRangeStart, customRangeEnd));
@@ -803,18 +823,21 @@ export default function AdminPage() {
     const bootstrapTables = async () => {
       try {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        let savedTables: TableEntry[] | null = null;
+        let resolvedTables: TableEntry[];
+        let storedEntries: Array<{ id: number; active: boolean }> | null = null;
+
         if (typeof window !== "undefined") {
           const stored = window.localStorage.getItem(TABLES_STORAGE_KEY);
           if (stored) {
             try {
-              const parsed = JSON.parse(stored) as TableEntry[];
+              const parsed = JSON.parse(stored) as Array<Partial<TableEntry>>;
               if (Array.isArray(parsed) && parsed.length > 0) {
-                savedTables = parsed.map((entry, index) => ({
-                  ...entry,
-                  id: entry.id ?? index + 1,
-                  active: entry.active !== false,
-                }));
+                storedEntries = parsed
+                  .map((entry, index) => ({
+                    id: entry?.id ?? index + 1,
+                    active: entry?.active !== false,
+                  }))
+                  .sort((a, b) => a.id - b.id);
               }
             } catch (error) {
               console.error("Failed to parse stored tables", error);
@@ -822,17 +845,23 @@ export default function AdminPage() {
           }
         }
 
-        if (!savedTables) {
-          savedTables = await Promise.all(
-            [1, 2, 3].map((index) => generateTableEntry(index, origin))
+        if (storedEntries) {
+          resolvedTables = await Promise.all(
+            storedEntries.map(({ id, active }) => generateTableEntry(id, origin, active))
           );
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(savedTables));
-          }
+        } else {
+          const defaultIndices = [1, 2, 3];
+          resolvedTables = await Promise.all(
+            defaultIndices.map((index) => generateTableEntry(index, origin))
+          );
+        }
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(resolvedTables));
         }
 
         if (isMounted) {
-          setTables(savedTables);
+          setTables(resolvedTables);
         }
       } catch (error) {
         console.error("Failed to bootstrap tables", error);
@@ -846,7 +875,10 @@ export default function AdminPage() {
     };
   }, [isAdmin]);
 
-  const nextTableIndex = useMemo(() => tables.length + 1, [tables.length]);
+  const nextTableIndex = useMemo(
+    () => tables.reduce((max, table) => Math.max(max, table.id), 0) + 1,
+    [tables]
+  );
 
   const handleAddTable = async () => {
     if (isGeneratingTable) {
@@ -858,7 +890,7 @@ export default function AdminPage() {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const entry = await generateTableEntry(nextTableIndex, origin);
       setTables((prev) => {
-        const next = [...prev, entry];
+        const next = [...prev, entry].sort((a, b) => a.id - b.id);
         if (typeof window !== "undefined") {
           window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(next));
         }
@@ -899,9 +931,43 @@ export default function AdminPage() {
     });
   };
 
+  const handleDeleteTable = (slug: string) => {
+    setTables((prev) => {
+      const next = prev.filter((entry) => entry.slug !== slug).sort((a, b) => a.id - b.id);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(TABLES_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
   const isCustomRangeIncomplete =
     backupRange === "custom" && (!customRangeStart || !customRangeEnd);
   const downloadDisabled = isExportingBackup || isCustomRangeIncomplete;
+
+  const handleSaveAll = () => {
+    if (!isDirty) return;
+    setPendingSave(true);
+  };
+
+  const handleCancelAll = () => {
+    if (!savedSettings) return;
+    setSettings(savedSettings);
+    setAdminAccounts(savedAdminAccounts);
+    setIsDirty(false);
+    setSaveMessage("Perubahan dibatalkan.");
+    window.setTimeout(() => setSaveMessage(null), 1800);
+  };
+
+  const handleCopyText = async (text: string, label?: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSaveMessage(`${label ?? "Teks"} disalin.`);
+      window.setTimeout(() => setSaveMessage(null), 1600);
+    } catch (e) {
+      console.error("Clipboard error", e);
+    }
+  };
 
   if (!isAdmin) {
     return null;
@@ -933,26 +999,41 @@ export default function AdminPage() {
               <div className="flex items-center gap-2">
                 <Link
                   href="/"
-                className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
-              >
-                Lihat Menu
-              </Link>
-              <button
-                type="button"
-                className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
-                onClick={logout}
-              >
-                Keluar
-              </button>
+                  className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+                >
+                  Lihat Menu
+                </Link>
+                <button
+                  type="button"
+                  className="rounded-full border border-emerald-200 bg-white/50 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
+                  onClick={logout}
+                >
+                  Keluar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[240px_1fr]">
+        <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[240px_1fr]">
         <aside className="rounded-3xl bg-white/80 backdrop-blur shadow border border-emerald-50/70 p-4 space-y-2">
           {NAV_ITEMS.map((item) => {
             const isActive = item.key === activeKey;
+            
+            // Special handling for orders - navigate to separate page
+            if (item.key === "orders") {
+              return (
+                <Link
+                  key={item.key}
+                  href="/admin/orders"
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition text-gray-500 hover:bg-emerald-50`}
+                >
+                  <span className="material-symbols-outlined text-base">{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            }
+            
             return (
               <button
                 key={item.key}
@@ -998,6 +1079,58 @@ export default function AdminPage() {
                     <p className="mt-3 text-xl font-semibold text-gray-800">{stat.value}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Quick Actions */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Link
+                  href="/admin/orders"
+                  className="group rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/60 p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
+                        <span className="material-symbols-outlined text-white text-lg">receipt_long</span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Kelola Pesanan</h3>
+                        <p className="text-sm text-gray-600">Lihat & update status pesanan</p>
+                      </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-400 group-hover:text-emerald-500 transition-colors">
+                      arrow_forward
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                      <span className="text-gray-600">{orders.filter(o => o.status === 'pending').length} Menunggu</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                      <span className="text-gray-600">{orders.filter(o => o.status === 'preparing').length} Diproses</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-gray-600">{orders.filter(o => o.status === 'ready').length} Siap</span>
+                    </div>
+                  </div>
+                </Link>
+
+                <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 via-white to-gray-100/60 p-6 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center">
+                        <span className="material-symbols-outlined text-white text-lg">analytics</span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Laporan Penjualan</h3>
+                        <p className="text-sm text-gray-600">Coming soon</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500">Fitur laporan detail akan segera tersedia</p>
+                </div>
               </div>
             </section>
           ) : null}
@@ -1160,6 +1293,13 @@ export default function AdminPage() {
                         >
                           {table.active ? "Nonaktifkan" : "Aktifkan"}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteTable(table)}
+                          className="rounded-full border border-red-200 bg-white px-3 py-1 font-semibold text-red-500 transition hover:bg-red-50"
+                        >
+                          Hapus
+                        </button>
                       </div>
                     </div>
                     <div className="rounded-2xl bg-white border border-emerald-100/80 p-3 shadow grid place-items-center">
@@ -1269,6 +1409,33 @@ export default function AdminPage() {
                       {saveMessage}
                     </div>
                   ) : null}
+
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCancelAll}
+                      disabled={!isDirty}
+                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                        isDirty
+                          ? "border-gray-200 text-gray-600 hover:bg-gray-100"
+                          : "border-gray-100 text-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveAll}
+                      disabled={!isDirty}
+                      className={`rounded-full px-4 py-2 text-xs font-semibold transition shadow ${
+                        isDirty
+                          ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                          : "bg-emerald-100 text-emerald-400 cursor-not-allowed"
+                      }`}
+                    >
+                      Simpan Perubahan
+                    </button>
+                  </div>
 
                   {activeSettingsSection === "store" ? (
                     <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
@@ -1392,81 +1559,8 @@ export default function AdminPage() {
                             value={settings.store.wifiName}
                             onChange={handleStoreFieldChange}
                             className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            placeholder="SPM-Cafe"
                           />
                         </div>
-                        <div className="space-y-2">
-                          <label htmlFor="store-wifi-password" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                            Password Wi-Fi
-                          </label>
-                          <input
-                            id="store-wifi-password"
-                            name="wifiPassword"
-                            type="text"
-                            value={settings.store.wifiPassword}
-                            onChange={handleStoreFieldChange}
-                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            placeholder="*******"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {activeSettingsSection === "hours" ? (
-                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Jam Operasional</p>
-                          <h3 className="text-lg font-semibold text-gray-700">Jadwal Layanan</h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            Atur jam buka harian agar pesanan online mengikuti waktu operasional Anda.
-                          </p>
-                        </div>
-                        <span className="material-symbols-outlined text-emerald-500 text-2xl">schedule</span>
-                      </div>
-                      <div className="mt-6 grid gap-3">
-                        {settings.hours.map((entry, index) => (
-                          <div
-                            key={entry.day}
-                            className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div>
-                              <p className="text-sm font-semibold text-gray-700">{entry.day}</p>
-                              <p className="text-xs text-gray-500">
-                                {entry.closed ? "Tutup sepanjang hari" : "Atur jam operasional"}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                              <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                  checked={entry.closed}
-                                  onChange={(event) => handleHourChange(index, "closed", event.target.checked)}
-                                />
-                                Tutup
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="time"
-                                  value={entry.open}
-                                  disabled={entry.closed}
-                                  onChange={(event) => handleHourChange(index, "open", event.target.value)}
-                                  className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:text-gray-400"
-                                />
-                                <span className="text-xs text-gray-400">s/d</span>
-                                <input
-                                  type="time"
-                                  value={entry.close}
-                                  disabled={entry.closed}
-                                  onChange={(event) => handleHourChange(index, "close", event.target.value)}
-                                  className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:text-gray-400"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   ) : null}
@@ -1493,12 +1587,13 @@ export default function AdminPage() {
                               id="payment-qris-name"
                               type="text"
                               value={settings.payment.qrisMerchantName}
-                              onChange={(event) =>
+                              onChange={(event) => {
                                 setSettings((prev) => ({
                                   ...prev,
                                   payment: { ...prev.payment, qrisMerchantName: event.target.value },
-                                }))
-                              }
+                                }));
+                                setIsDirty(true);
+                              }}
                               className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             />
                           </div>
@@ -1506,26 +1601,36 @@ export default function AdminPage() {
                             <label htmlFor="payment-qris-id" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
                               ID Merchant / QRIS
                             </label>
-                            <input
-                              id="payment-qris-id"
-                              type="text"
-                              value={settings.payment.qrisId}
-                              onChange={(event) =>
-                                setSettings((prev) => ({
-                                  ...prev,
-                                  payment: { ...prev.payment, qrisId: event.target.value },
-                                }))
-                              }
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            />
+                            <div className="relative">
+                              <input
+                                id="payment-qris-id"
+                                type="text"
+                                value={settings.payment.qrisId}
+                                onChange={(event) =>
+                                  setSettings((prev) => ({
+                                    ...prev,
+                                    payment: { ...prev.payment, qrisId: event.target.value },
+                                  }))
+                                }
+                                onInput={() => setIsDirty(true)}
+                                className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 pr-10 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleCopyText(settings.payment.qrisId, "ID Merchant")}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-600 hover:text-emerald-700"
+                                aria-label="Salin ID Merchant"
+                              >
+                                <span className="material-symbols-outlined text-base">content_copy</span>
+                              </button>
+                            </div>
                           </div>
                           <div className="space-y-2">
                             <label htmlFor="payment-bank-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
                               Nama Bank
                             </label>
-                            <input
+                            <select
                               id="payment-bank-name"
-                              type="text"
                               value={settings.payment.bankName}
                               onChange={(event) =>
                                 setSettings((prev) => ({
@@ -1533,6 +1638,29 @@ export default function AdminPage() {
                                   payment: { ...prev.payment, bankName: event.target.value },
                                 }))
                               }
+                              onInput={() => setIsDirty(true)}
+                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            >
+                              {BANK_OPTIONS.map((name) => (
+                                <option key={name} value={name}>{name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="payment-bank-account-name" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                              Nama Pemilik Rekening (Atas Nama)
+                            </label>
+                            <input
+                              id="payment-bank-account-name"
+                              type="text"
+                              value={settings.payment.bankAccountName}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  payment: { ...prev.payment, bankAccountName: event.target.value },
+                                }))
+                              }
+                              onInput={() => setIsDirty(true)}
                               className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             />
                           </div>
@@ -1542,16 +1670,21 @@ export default function AdminPage() {
                             </label>
                             <input
                               id="payment-bank-account"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               type="text"
                               value={settings.payment.bankAccountNumber}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                const digits = event.target.value.replace(/\D/g, "");
                                 setSettings((prev) => ({
                                   ...prev,
-                                  payment: { ...prev.payment, bankAccountNumber: event.target.value },
-                                }))
-                              }
+                                  payment: { ...prev.payment, bankAccountNumber: digits },
+                                }));
+                                setIsDirty(true);
+                              }}
                               className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             />
+                            <p className="text-xs text-gray-400">Hanya angka, tanpa spasi atau tanda hubung.</p>
                           </div>
                         </div>
 
@@ -1585,10 +1718,12 @@ export default function AdminPage() {
                               id="payment-service-charge"
                               type="number"
                               min={0}
+                              max={100}
                               value={settings.payment.serviceCharge}
                               onChange={(event) => handlePaymentNumberChange("serviceCharge", event)}
                               className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             />
+                            <p className="text-xs text-gray-400">Pajak dihitung dari total setelah service charge.</p>
                           </div>
                           <div className="space-y-2">
                             <label htmlFor="payment-tax-rate" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
@@ -1598,12 +1733,75 @@ export default function AdminPage() {
                               id="payment-tax-rate"
                               type="number"
                               min={0}
+                              max={100}
                               value={settings.payment.taxRate}
                               onChange={(event) => handlePaymentNumberChange("taxRate", event)}
                               className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                             />
+                            <p className="text-xs text-gray-400">Nilai 0–100. Urutan hitung: subtotal + service, lalu pajak.</p>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "hours" ? (
+                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Jam Operasional</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Atur Jadwal Buka Toko</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Sesuaikan jam buka dan tutup toko untuk setiap hari.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">schedule</span>
+                      </div>
+                      <div className="mt-6 space-y-4">
+                        {settings.hours.map((hour, index) => (
+                          <div key={index} className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <p className="font-semibold text-gray-700">{hour.day}</p>
+                              </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <label htmlFor={`open-${index}`} className="text-xs font-semibold text-gray-500">
+                                Buka:
+                              </label>
+                              <input
+                                id={`open-${index}`}
+                                type="time"
+                                value={hour.open}
+                                onChange={(e) => handleHourChange(index, "open", e.target.value)}
+                                className="w-32 sm:w-36 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <label htmlFor={`close-${index}`} className="text-xs font-semibold text-gray-500">
+                                Tutup:
+                              </label>
+                              <input
+                                id={`close-${index}`}
+                                type="time"
+                                value={hour.close}
+                                onChange={(e) => handleHourChange(index, "close", e.target.value)}
+                                className="w-32 sm:w-36 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              />
+                            </div>
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                    checked={hour.closed}
+                                    onChange={(e) => handleHourChange(index, "closed", e.target.checked)}
+                                  />
+                                  <span className="text-xs font-semibold text-gray-500">Tutup</span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ) : null}
@@ -1613,85 +1811,201 @@ export default function AdminPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Notifikasi</p>
-                          <h3 className="text-lg font-semibold text-gray-700">Pemberitahuan & Laporan</h3>
+                          <h3 className="text-lg font-semibold text-gray-700">Pengaturan Notifikasi</h3>
                           <p className="text-sm text-gray-500 mt-1">
-                            Atur siapa yang menerima notifikasi pesanan dan ringkasan operasional.
+                            Atur notifikasi real-time dan laporan otomatis.
                           </p>
                         </div>
                         <span className="material-symbols-outlined text-emerald-500 text-2xl">notifications_active</span>
                       </div>
 
-                      <div className="mt-6 space-y-4">
-                        {[
-                          {
-                            field: "newOrder" as const,
-                            title: "Pesanan Baru",
-                            description: "Notifikasi real-time saat pesanan dari QRIS berhasil masuk.",
-                          },
-                          {
-                            field: "lowStock" as const,
-                            title: "Stok Hampir Habis",
-                            description: "Terima peringatan ketika stok bahan baku mencapai batas minimum.",
-                          },
-                          {
-                            field: "staffSchedule" as const,
-                            title: "Pengingat Jadwal Staff",
-                            description: "Kirim pengingat jadwal shift ke grup WhatsApp staff.",
-                          },
-                          {
-                            field: "sound" as const,
-                            title: "Bunyikan Bel",
-                            description: "Putar suara notifikasi di perangkat kasir untuk setiap order baru.",
-                          },
-                        ].map((item) => (
-                          <label
-                            key={item.field}
-                            className="flex items-start justify-between gap-4 rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3"
-                          >
-                            <div>
-                              <p className="text-sm font-semibold text-gray-700">{item.title}</p>
-                              <p className="text-xs text-gray-500 mt-1">{item.description}</p>
-                            </div>
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                              checked={settings.notifications[item.field]}
-                              onChange={() => handleNotificationToggle(item.field)}
-                            />
-                          </label>
-                        ))}
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <label htmlFor="notification-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Email Laporan
-                            </label>
-                            <input
-                              id="notification-email"
-                              name="email"
-                              type="email"
-                              value={settings.notifications.email}
-                              onChange={handleNotificationContactChange}
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label htmlFor="notification-whatsapp" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Nomor WhatsApp
-                            </label>
-                            <input
-                              id="notification-whatsapp"
-                              name="whatsapp"
-                              type="tel"
-                              value={settings.notifications.whatsapp}
-                              onChange={handleNotificationContactChange}
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            />
+                      <div className="mt-6 space-y-8">
+                        {/* Notifikasi Real-time */}
+                        <div>
+                          <h4 className="text-md font-semibold text-gray-700 mb-3">Notifikasi Real-time</h4>
+                          <div className="space-y-4">
+                            {[
+                              {
+                                field: "newOrder" as const,
+                                title: "Pesanan Baru",
+                                description: "Notifikasi real-time saat pesanan dari QRIS berhasil masuk.",
+                              },
+                              {
+                                field: "lowStock" as const,
+                                title: "Stok Hampir Habis",
+                                description: "Terima peringatan ketika stok bahan baku mencapai batas minimum.",
+                              },
+                              {
+                                field: "staffSchedule" as const,
+                                title: "Pengingat Jadwal Staff",
+                                description: "Kirim pengingat jadwal shift ke grup WhatsApp staff.",
+                              },
+                              {
+                                field: "sound" as const,
+                                title: "Bunyikan Bel",
+                                description: "Putar suara notifikasi di perangkat kasir untuk setiap order baru.",
+                              },
+                            ].map((item) => (
+                              <label
+                                key={item.field}
+                                className="flex items-start justify-between gap-4 rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3"
+                              >
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-700">{item.title}</p>
+                                  <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                  checked={settings.notifications[item.field]}
+                                  onChange={() => handleNotificationToggle(item.field)}
+                                />
+                              </label>
+                            ))}
                           </div>
                         </div>
-                        <p className="text-xs text-gray-400">
-                          Email harian dikirim pukul 22.00 WIB · Pesan WhatsApp akan diteruskan otomatis.
-                        </p>
+
+                        {/* Konfigurasi Notifikasi Spesifik */}
+                        <div className="space-y-4">
+                          {settings.notifications.lowStock && (
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-700">Konfigurasi Stok Hampir Habis</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Atur ambang batas minimum untuk notifikasi stok.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowLowStockConfig(!showLowStockConfig)}
+                                  className="text-emerald-600 hover:text-emerald-700"
+                                >
+                                  <span className="material-symbols-outlined text-base">
+                                    {showLowStockConfig ? "expand_less" : "expand_more"}
+                                  </span>
+                                </button>
+                              </div>
+                              {showLowStockConfig && (
+                                <div className="mt-3 space-y-3">
+                                  <div className="space-y-2">
+                                    <label htmlFor="low-stock-threshold" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                      Ambang Batas Stok (gram)
+                                    </label>
+                                    <input
+                                      id="low-stock-threshold"
+                                      type="number"
+                                      value={settings.notifications.lowStockThreshold}
+                                      onChange={handleLowStockThresholdChange}
+                                      className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                    <p className="text-xs text-gray-400">
+                                      Notifikasi akan muncul ketika stok kurang dari nilai ini.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {settings.notifications.staffSchedule && (
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-700">Konfigurasi Pengingat Jadwal Staff</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Atur pengingat jadwal shift staff.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowStaffScheduleConfig(!showStaffScheduleConfig)}
+                                  className="text-emerald-600 hover:text-emerald-700"
+                                >
+                                  <span className="material-symbols-outlined text-base">
+                                    {showStaffScheduleConfig ? "expand_less" : "expand_more"}
+                                  </span>
+                                </button>
+                              </div>
+                              {showStaffScheduleConfig && (
+                                <div className="mt-3 space-y-3">
+                                  <div className="space-y-2">
+                                    <label htmlFor="staff-schedule-reminder" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                      Waktu Pengingat (jam sebelum shift)
+                                    </label>
+                                    <input
+                                      id="staff-schedule-reminder"
+                                      type="number"
+                                      value={settings.notifications.staffScheduleReminderTime}
+                                      onChange={handleStaffScheduleReminderTimeChange}
+                                      className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                    <p className="text-xs text-gray-400">
+                                      Kirim pengingat {settings.notifications.staffScheduleReminderTime} jam sebelum shift dimulai.
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label htmlFor="staff-schedule-group" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                      Tautan Grup WhatsApp Staff
+                                    </label>
+                                    <input
+                                      id="staff-schedule-group"
+                                      type="text"
+                                      value={settings.notifications.staffScheduleGroupLink}
+                                      onChange={handleStaffScheduleGroupLinkChange}
+                                      className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                      placeholder="https://chat.whatsapp.com/..."
+                                    />
+                                    <p className="text-xs text-gray-400">
+                                      Masukkan tautan grup WhatsApp untuk pengiriman pengingat.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Laporan Otomatis */}
+                        <div>
+                          <h4 className="text-md font-semibold text-gray-700 mb-3">Laporan Otomatis</h4>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <label htmlFor="notification-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                Email Laporan
+                              </label>
+                              <input
+                                id="notification-email"
+                                name="email"
+                                type="email"
+                                value={settings.notifications.email}
+                                onChange={handleNotificationContactChange}
+                                className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label htmlFor="notification-whatsapp" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                Nomor WhatsApp
+                              </label>
+                              <input
+                                id="notification-whatsapp"
+                                name="whatsapp"
+                                type="tel"
+                                value={settings.notifications.whatsapp}
+                                onChange={handleNotificationContactChange}
+                                className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <p className="text-xs text-gray-400">
+                              Email harian dikirim pukul 22.00 WIB · Pesan WhatsApp akan diteruskan otomatis.
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Laporan harian mencakup ringkasan penjualan, stok, dan aktivitas operasional.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : null}
@@ -1709,49 +2023,91 @@ export default function AdminPage() {
                         <span className="material-symbols-outlined text-emerald-500 text-2xl">group</span>
                       </div>
 
-                      <div className="mt-6 space-y-4">
-                        {settings.adminAccounts.map((account) => (
-                          <div
-                            key={account.email}
-                            className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div>
-                              <p className="text-sm font-semibold text-gray-700">{account.name}</p>
-                              <p className="text-xs text-gray-500">
-                                {account.email} {account.phone ? `· ${account.phone}` : ""}
-                              </p>
-                              <p className="text-xs text-gray-400">Terakhir aktif: {account.lastLogin}</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-600">
-                                {account.role}
-                              </span>
-                              <span
-                                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                  account.status === "active"
-                                    ? "bg-emerald-100 text-emerald-600 border border-emerald-100"
-                                    : "bg-amber-100 text-amber-600 border border-amber-100"
-                                }`}
-                              >
-                                {account.status === "active" ? "Aktif" : "Menunggu"}
-                              </span>
-                              {account.role !== "Pemilik" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveAdmin(account.email)}
-                                  className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 transition"
-                                  aria-label={`Hapus admin ${account.name}`}
-                                >
-                                  Hapus
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
+                      <div className="mt-6 overflow-x-auto">
+                        <table className="min-w-full divide-y divide-emerald-100 text-sm">
+                          <thead className="bg-emerald-50/40 text-left text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">
+                            <tr>
+                              <th className="px-4 py-3">Nama</th>
+                              <th className="px-4 py-3">Email</th>
+                              <th className="px-4 py-3">Peran</th>
+                              <th className="px-4 py-3">Status</th>
+                              <th className="px-4 py-3 text-right">Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-emerald-50 bg-white/60">
+                            {adminAccounts.filter(acc => acc.status !== 'pending').map((account) => (
+                              <tr key={account.email} className="text-gray-600">
+                                <td className="px-4 py-3 font-medium text-gray-700">{account.name}</td>
+                                <td className="px-4 py-3">{account.email}</td>
+                                <td className="px-4 py-3">{account.role}</td>
+                                <td className="px-4 py-3">
+                                  <span
+                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                      account.status === "active"
+                                        ? "bg-emerald-100 text-emerald-600"
+                                        : "bg-gray-100 text-gray-500"
+                                    }`}
+                                  >
+                                    {account.status === 'active' ? 'Aktif' : 'Nonaktif'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="relative inline-block text-left">
+                                    <button type="button" className="rounded-full p-1 hover:bg-gray-200" onClick={() => setOpenDropdown(openDropdown === account.email ? null : account.email)} disabled={account.role === 'Pemilik'}>
+                                      <span className="material-symbols-outlined">more_vert</span>
+                                    </button>
+                                    {openDropdown === account.email && (
+                                      <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                        <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                                          <button onClick={() => { setEditingUser(account); setOpenDropdown(null); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Edit</button>
+                                          <button onClick={() => { handleToggleUserStatus(account.email); setOpenDropdown(null); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">{account.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}</button>
+                                          <button onClick={() => { handleRemoveAdmin(account.email); setOpenDropdown(null); }} className="block w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-gray-100" role="menuitem">Hapus</button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="mt-6">
+                        <h3 className="text-lg font-semibold text-gray-700">Undangan Tertunda</h3>
+                        <div className="mt-2 overflow-x-auto">
+                          <table className="min-w-full divide-y divide-emerald-100 text-sm">
+                            <thead className="bg-emerald-50/40 text-left text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">
+                              <tr>
+                                <th className="px-4 py-3">Email</th>
+                                <th className="px-4 py-3">Peran</th>
+                                <th className="px-4 py-3 text-right">Aksi</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-emerald-50 bg-white/60">
+                              {adminAccounts.filter(acc => acc.status === 'pending').map((account) => (
+                                <tr key={account.email} className="text-gray-600">
+                                  <td className="px-4 py-3">{account.email}</td>
+                                  <td className="px-4 py-3">{account.role}</td>
+                                  <td className="px-4 py-3 text-right space-x-2">
+                                    <button onClick={() => handleResendInvitation(account.email)} className="text-emerald-600 hover:underline text-xs">Kirim Ulang</button>
+                                    <button onClick={() => handleRemoveAdmin(account.email)} className="text-red-500 hover:underline text-xs">Batalkan</button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
 
                       <div className="mt-6 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 p-4">
-                        <p className="text-sm font-semibold text-gray-700">Undang Admin Baru</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-gray-700">Undang Admin Baru</p>
+                            <button onClick={() => setShowRoleInfo(true)} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+                                <span className="material-symbols-outlined text-sm">info</span>
+                                <span>Info Peran</span>
+                            </button>
+                        </div>
                         <p className="text-xs text-gray-500">
                           Kirim undangan ke email untuk memberikan akses dashboard. Undangan berlaku 24 jam.
                         </p>
@@ -1983,30 +2339,6 @@ export default function AdminPage() {
                       </div>
                     </div>
                   ) : null}
-
-                  {activeSettingsSection !== "backup" ? (
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-gray-400">
-                        Perubahan disimpan otomatis di perangkat ini. Klik simpan untuk menandai konfigurasi final.
-                      </p>
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={handleResetSettings}
-                          className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
-                        >
-                          Reset ke Default
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveSettings}
-                          className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600 transition"
-                        >
-                          Simpan Perubahan
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </section>
@@ -2014,7 +2346,7 @@ export default function AdminPage() {
         </main>
       </div>
       </div>
-      {showClearConfirm || pendingToggleSlug ? (
+      {showClearConfirm || pendingToggleSlug || pendingDeleteTable ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
             {showClearConfirm ? (
@@ -2072,9 +2404,116 @@ export default function AdminPage() {
                 </div>
               </>
             ) : null}
+
+            {pendingDeleteTable ? (
+              <>
+                <p className="text-sm font-semibold text-gray-800">
+                  Hapus {pendingDeleteTable.name}?
+                </p>
+                <p className="text-xs text-gray-500">
+                  QR dan tautan meja {pendingDeleteTable.slug} akan dihapus. Cetak ulang QR baru jika diperlukan.
+                </p>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
+                    onClick={() => setPendingDeleteTable(null)}
+                  >
+                    Batalkan
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-600"
+                    onClick={() => {
+                      handleDeleteTable(pendingDeleteTable.slug);
+                      setPendingDeleteTable(null);
+                    }}
+                  >
+                    Hapus
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
+      {showRoleInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800">Deskripsi Peran</h3>
+                <div className="space-y-3 text-sm">
+                    {ADMIN_ROLE_OPTIONS.map(role => (
+                        <div key={role}>
+                            <p className="font-semibold text-gray-700">{role}</p>
+                            <p className="text-xs text-gray-500">{ROLE_DESCRIPTIONS[role]}</p>
+                        </div>
+                    ))}
+                </div>
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600"
+                        onClick={() => setShowRoleInfo(false)}
+                    >
+                        Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800">Edit Pengguna</h3>
+                <p className="text-sm text-gray-600">Mengedit: <span className="font-semibold">{editingUser.name}</span></p>
+                <div className="space-y-2">
+                  <label htmlFor="edit-role" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                    Peran
+                  </label>
+                  <select
+                    id="edit-role"
+                    value={editingUser.role}
+                    onChange={(event) =>
+                      setEditingUser(prev => prev ? {...prev, role: event.target.value as typeof ADMIN_ROLE_OPTIONS[number]} : null)
+                    }
+                    className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  >
+                    {ADMIN_ROLE_OPTIONS.map((role) => (
+                      <option key={role} value={role} disabled={role === 'Pemilik'}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center justify-end gap-3">
+                    <button
+                        type="button"
+                        className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
+                        onClick={() => setEditingUser(null)}
+                    >
+                        Batalkan
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600"
+                        onClick={() => {
+                            if(editingUser) {
+                                // Validate that the role is one of our valid options
+                                const validRole = ADMIN_ROLE_OPTIONS.includes(editingUser.role as typeof ADMIN_ROLE_OPTIONS[number]) 
+                                    ? editingUser.role as typeof ADMIN_ROLE_OPTIONS[number] 
+                                    : "Staff"; // Default fallback
+                                handleUpdateUserRole(editingUser.email, validRole);
+                                setEditingUser(null);
+                            }
+                        }}
+                    >
+                        Simpan
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </>
   );
 }
