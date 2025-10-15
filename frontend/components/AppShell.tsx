@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { NAVIGATION } from "@/lib/navigation";
 import { setupMotionEffects } from "@/lib/motion";
+import { useNavigationWithIcons } from "@/hooks/useNavigationWithIcons";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { CategoryPills } from "./CategoryPills";
@@ -35,10 +36,12 @@ export function AppShell({
     return () => cleanup();
   }, [activeSlug]);
 
+  const navigationItems = useNavigationWithIcons(NAVIGATION);
+
   return (
     <div className="max-w-7xl mx-auto md:flex md:items-start md:min-h-screen">
       {!hideNavigation ? (
-        <Sidebar items={NAVIGATION} activeSlug={activeSlug} />
+        <Sidebar items={navigationItems} activeSlug={activeSlug} />
       ) : null}
       <div className="flex-1 min-w-0">
         <div
@@ -52,7 +55,7 @@ export function AppShell({
             backHref={backHref}
           />
           {!hideNavigation ? (
-            <CategoryPills items={NAVIGATION} activeSlug={activeSlug} />
+            <CategoryPills items={navigationItems} activeSlug={activeSlug} />
           ) : null}
         </div>
         {children}

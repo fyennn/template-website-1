@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import type { NavigationItem } from "@/lib/navigation";
+import { useNavigationWithIcons } from "@/hooks/useNavigationWithIcons";
 import type { CategorySlug, Product } from "@/lib/products";
 import { setupMotionEffects } from "@/lib/motion";
 import { Header } from "@/components/Header";
@@ -28,8 +30,9 @@ const gridClassName =
   "p-4 pb-24 space-y-12 md:space-y-16";
 
 export function MenuPageContent({ navigation, sections }: MenuPageProps) {
-  const defaultSlug = navigation[0]?.slug ?? "all";
-  const [activeSlug, setActiveSlug] = useState<CategorySlug>(defaultSlug);
+  const initialActiveSlug = navigation[0]?.slug ?? "all";
+  const navItems = useNavigationWithIcons(navigation);
+  const [activeSlug, setActiveSlug] = useState<CategorySlug>(initialActiveSlug);
   const allSentinelRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const activeSlugRef = useRef(activeSlug);
@@ -43,6 +46,14 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
   useEffect(() => {
     activeSlugRef.current = activeSlug;
   }, [activeSlug]);
+
+  useEffect(() => {
+    if (navItems.some((item) => item.slug === activeSlug)) {
+      return;
+    }
+    const fallbackSlug = navItems[0]?.slug ?? "all";
+    setActiveSlug(fallbackSlug);
+  }, [navItems, activeSlug]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -251,7 +262,7 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
             data-animate-group="category-desktop"
             data-animate-stagger="70"
           >
-            {navigation.map((item) => {
+            {navItems.map((item) => {
               const isActive = item.slug === activeSlug;
               const isAll = item.slug === "all";
               return (
@@ -263,11 +274,10 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
                   aria-pressed={isActive}
                   aria-label={item.label}
                 >
-                  <span
-                    className={`material-symbols-outlined category-link__icon${isAll ? " category-link__icon--solo" : ""}`}
-                  >
-                    {item.icon}
-                  </span>
+                  <CategoryIcon
+                    value={item.icon}
+                    className={`category-link__icon${isAll ? " category-link__icon--solo" : ""}`}
+                  />
                   {!isAll ? item.label : null}
                 </button>
               );
@@ -283,7 +293,7 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
         >
           <Header />
           <CategoryPills
-            items={navigation}
+            items={navItems}
             activeSlug={activeSlug}
             onSelect={(slug, event) => {
               event.preventDefault();

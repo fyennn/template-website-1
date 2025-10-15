@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { MouseEvent } from "react";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import type { NavigationItem } from "@/lib/navigation";
 import type { CategorySlug } from "@/lib/products";
 
@@ -34,11 +35,10 @@ export function CategoryPills({ items, activeSlug, onSelect }: CategoryPillsProp
               }
             }}
           >
-            <span
-              className={`material-symbols-outlined category-pill__icon${isAll ? " category-pill__icon--solo" : ""}`}
-            >
-              {item.icon}
-            </span>
+            <CategoryIcon
+              value={item.icon}
+              className={`category-pill__icon${isAll ? " category-pill__icon--solo" : ""}`}
+            />
             {!isAll ? item.pillLabel ?? item.label : null}
           </Link>
         );

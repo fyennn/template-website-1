@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import { useAuth } from "@/lib/authStore";
 import { useOrders } from "@/lib/orderStore";
+import { PRODUCT_CATALOG } from "@/lib/products";
 import type { ChangeEvent, FormEvent } from "react";
 
 type AdminNavKey = "dashboard" | "products" | "tables" | "orders" | "settings";
@@ -90,6 +92,313 @@ type AdminSettings = {
   };
   adminAccounts: Array<AdminAccount>;
 };
+
+type ProductCategory = string;
+
+type ProductFormState = {
+  name: string;
+  category: ProductCategory;
+  price: string;
+  description: string;
+  sku: string;
+  imageUrl: string;
+  imagePreviewUrl: string | null;
+  highlight: string;
+  isAvailable: boolean;
+  isFeatured: boolean;
+  soldOut: boolean;
+  hotOption: boolean;
+  icedOption: boolean;
+  prepTime: string;
+  calories: string;
+  customizations: CustomizationGroup[];
+};
+
+type AdminProductRecord = {
+  id: string;
+  name: string;
+  category: ProductCategory;
+  price: number;
+  description: string;
+  sku: string;
+  imageUrl: string;
+  highlight: string;
+  isAvailable: boolean;
+  isFeatured: boolean;
+  soldOut: boolean;
+  hotOption: boolean;
+  icedOption: boolean;
+  prepTime: string;
+  calories: string;
+  createdAt: string;
+  customizations: CustomizationGroup[];
+};
+
+type CustomizationGroup = {
+  id: string;
+  name: string;
+  type: "single" | "multiple";
+  required: boolean;
+  helperText?: string;
+  options: CustomizationOption[];
+};
+
+type CustomizationOption = {
+  id: string;
+  label: string;
+  priceAdjustment: number;
+};
+
+const SAMPLE_PRODUCTS: AdminProductRecord[] = [
+  {
+    id: "sample-pistachio-latte",
+    name: "Pistachio Latte",
+    category: "pistachio-series",
+    price: 55000,
+    description: "Creme pistachio dengan espresso signature.",
+    sku: "PST-001",
+    imageUrl:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuBZ6c9w2xX2kDiuabOBwANz7uF-RlHvb5-M45NrSbvbnLTN0ftsnUf9HjJjqVLAMgwSw17xI3Sn_IZjdUflf7rw0sirs6pcbq5URj0mrYxoQ0vNq0id-53cCFRtlLzkt2CTGyG76CiADHW5eyOmhGQEhylw2Qr_VvQX_VE1XtDjNtUVz3-bzG4UJ8pzBjGFuQdmgfl30oK1TbN4_4Y5W-6-5Qp7cp5gxpA-GgvnakgO3Jdlr1a0slJMrdPqZXsomuhiHkaRET7IJqM",
+    highlight: "Best seller pistachio series",
+    isAvailable: true,
+    isFeatured: true,
+    soldOut: false,
+    hotOption: true,
+    icedOption: true,
+    prepTime: "7",
+    calories: "320",
+    createdAt: new Date().toISOString(),
+    customizations: [
+      {
+        id: "sample-size",
+        name: "Ukuran",
+        type: "single",
+        required: true,
+        helperText: "Pilih ukuran cup",
+        options: [
+          { id: "size-small", label: "Small", priceAdjustment: -3000 },
+          { id: "size-regular", label: "Regular", priceAdjustment: 0 },
+          { id: "size-large", label: "Large", priceAdjustment: 5000 },
+        ],
+      },
+      {
+        id: "sample-topping",
+        name: "Tambahan",
+        type: "multiple",
+        required: false,
+        helperText: "Boleh pilih lebih dari satu",
+        options: [
+          { id: "top-cream", label: "Whipped Cream", priceAdjustment: 5000 },
+          { id: "top-caramel", label: "Caramel Drizzle", priceAdjustment: 5000 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "sample-matcha-frappe",
+    name: "Matcha Frappe",
+    category: "matcha-club",
+    price: 52500,
+    description: "Matcha premium dengan tekstur creamy dingin.",
+    sku: "MTC-002",
+    imageUrl: "/images/products/matcha-frappe.jpg",
+    highlight: "Blend matcha favorit pelanggan",
+    isAvailable: true,
+    isFeatured: false,
+    soldOut: false,
+    hotOption: false,
+    icedOption: true,
+    prepTime: "5",
+    calories: "290",
+    createdAt: new Date().toISOString(),
+    customizations: [
+      {
+        id: "sample-matcha-ice",
+        name: "Level Es",
+        type: "single",
+        required: true,
+        options: [
+          { id: "ice-less", label: "Less Ice", priceAdjustment: 0 },
+          { id: "ice-normal", label: "Normal", priceAdjustment: 0 },
+          { id: "ice-extra", label: "Extra Ice", priceAdjustment: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "sample-ethiopia-yirgacheffe",
+    name: "Ethiopia Yirgacheffe",
+    category: "master-soe-series",
+    price: 150000,
+    description: "Single origin dengan notes fruity & floral.",
+    sku: "SOE-ETH",
+    imageUrl: "/images/products/ethiopia-yirgacheffe.jpg",
+    highlight: "Limited roast mingguan",
+    isAvailable: true,
+    isFeatured: true,
+    soldOut: false,
+    hotOption: true,
+    icedOption: false,
+    prepTime: "4",
+    calories: "5",
+    createdAt: new Date().toISOString(),
+    customizations: [],
+  },
+];
+
+const PRODUCTS_STORAGE_KEY = "spm-admin-products";
+const CUSTOMIZATION_TEMPLATES: Array<{
+  key: string;
+  label: string;
+  description: string;
+  group: Omit<CustomizationGroup, "id">;
+}> = [
+  {
+    key: "size",
+    label: "Template Ukuran",
+    description: "Small / Regular / Large",
+    group: {
+      name: "Ukuran",
+      type: "single",
+      required: true,
+      helperText: "Pilih ukuran cup",
+      options: [
+        { id: "", label: "Small", priceAdjustment: -3000 },
+        { id: "", label: "Regular", priceAdjustment: 0 },
+        { id: "", label: "Large", priceAdjustment: 5000 },
+      ],
+    },
+  },
+  {
+    key: "ice",
+    label: "Level Es",
+    description: "No Ice / Less Ice / Normal / Extra Ice",
+    group: {
+      name: "Level Es",
+      type: "single",
+      required: true,
+      helperText: "Sesuaikan preferensi es pelanggan",
+      options: [
+        { id: "", label: "No Ice", priceAdjustment: 0 },
+        { id: "", label: "Less Ice", priceAdjustment: 0 },
+        { id: "", label: "Normal", priceAdjustment: 0 },
+        { id: "", label: "Extra Ice", priceAdjustment: 0 },
+      ],
+    },
+  },
+  {
+    key: "sweetness",
+    label: "Level Gula",
+    description: "No Sugar / Less / Normal / Extra",
+    group: {
+      name: "Level Gula",
+      type: "single",
+      required: true,
+      helperText: "Bantu pelanggan mengatur kadar gula",
+      options: [
+        { id: "", label: "No Sugar", priceAdjustment: 0 },
+        { id: "", label: "Less Sugar", priceAdjustment: 0 },
+        { id: "", label: "Normal", priceAdjustment: 0 },
+        { id: "", label: "Extra Sugar", priceAdjustment: 0 },
+      ],
+    },
+  },
+  {
+    key: "topping",
+    label: "Topping Favorit",
+    description: "Boba / Extra Shot / Whipped Cream",
+    group: {
+      name: "Tambahan",
+      type: "multiple",
+      required: false,
+      helperText: "Boleh pilih lebih dari satu",
+      options: [
+        { id: "", label: "Boba", priceAdjustment: 8000 },
+        { id: "", label: "Extra Shot", priceAdjustment: 10000 },
+        { id: "", label: "Whipped Cream", priceAdjustment: 5000 },
+        { id: "", label: "Caramel Drizzle", priceAdjustment: 5000 },
+      ],
+    },
+  },
+];
+
+function createId(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const DEFAULT_CATEGORY_OPTIONS = Object.keys(PRODUCT_CATALOG).filter((key) => key !== "all");
+const DEFAULT_CATEGORY_ICONS: Record<string, string> = {
+  "pistachio-series": "local_cafe",
+  "matcha-club": "spa",
+  "master-soe-series": "coffee_maker",
+  merchandise: "shopping_bag",
+};
+
+const CATEGORY_ICON_CHOICES = [
+  "local_cafe",
+  "coffee",
+  "coffee_maker",
+  "restaurant",
+  "restaurant_menu",
+  "bakery_dining",
+  "brunch_dining",
+  "ramen_dining",
+  "soup_kitchen",
+  "emoji_food_beverage",
+  "blender",
+  "cookie",
+  "cake",
+  "icecream",
+  "lunch_dining",
+  "breakfast_dining",
+  "dinner_dining",
+  "nutrition",
+  "egg_alt",
+  "water_drop",
+  "energy_savings_leaf",
+  "spa",
+  "local_dining",
+  "rice_bowl",
+  "takeout_dining",
+  "fastfood",
+  "delivery_dining",
+  "outdoor_grill",
+  "kebab_dining",
+  "set_meal",
+  "local_bar",
+  "wine_bar",
+  "liquor",
+  "local_drink",
+  "sports_bar",
+];
+
+const CATEGORIES_STORAGE_KEY = "spm-admin-categories";
+const CATEGORIES_STORAGE_VERSION = 2;
+const DEFAULT_NEW_CATEGORY_ICON = CATEGORY_ICON_CHOICES[0];
+const ALLOWED_CATEGORY_ICON_SET = new Set([...CATEGORY_ICON_CHOICES, ...Object.values(DEFAULT_CATEGORY_ICONS)]);
+
+function normalizeCategoryIcon(rawIcon: string | undefined, slug?: string) {
+  const trimmed = rawIcon?.trim() ?? "";
+  if (trimmed && ALLOWED_CATEGORY_ICON_SET.has(trimmed)) {
+    return trimmed;
+  }
+  if (slug && DEFAULT_CATEGORY_ICONS[slug]) {
+    return DEFAULT_CATEGORY_ICONS[slug];
+  }
+  return DEFAULT_NEW_CATEGORY_ICON;
+}
+
+function slugifyCategoryName(name: string) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function resolveCategoryIcon(slug: string, icons: Record<string, string>) {
+  return icons[slug] ?? DEFAULT_CATEGORY_ICONS[slug] ?? "category";
+}
 
 const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   store: {
@@ -200,6 +509,34 @@ function mergeStoredSettings(stored: Partial<AdminSettings> | null | undefined):
   };
 }
 
+function createEmptyProductForm(): ProductFormState {
+  return {
+    name: "",
+    category: "pistachio-series",
+    price: "",
+    description: "",
+    sku: "",
+    imageUrl: "",
+    imagePreviewUrl: null,
+    highlight: "",
+    isAvailable: true,
+    isFeatured: false,
+    soldOut: false,
+    hotOption: true,
+    icedOption: true,
+    prepTime: "",
+    calories: "",
+    customizations: [],
+  };
+}
+
+function formatCategoryLabel(slug: string) {
+  return slug
+    .split("-")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 const ADMIN_ROLE_OPTIONS = ["Pemilik", "Manager", "Supervisor", "Staff"] as const;
 const ROLE_DESCRIPTIONS: Record<typeof ADMIN_ROLE_OPTIONS[number], string> = {
     Pemilik: "Akses penuh ke semua pengaturan dan data. Hanya bisa diatur oleh pemilik lain.",
@@ -210,6 +547,7 @@ const ROLE_DESCRIPTIONS: Record<typeof ADMIN_ROLE_OPTIONS[number], string> = {
 
 type SettingsSectionKey =
   | "store"
+  | "categories"
   | "hours"
   | "payment"
   | "notifications"
@@ -236,6 +574,12 @@ const SETTINGS_SECTIONS: Array<{
     label: "Informasi Toko",
     description: "Profil & kontak bisnis Anda",
     icon: "storefront",
+  },
+  {
+    key: "categories",
+    label: "Kategori Produk",
+    description: "Atur daftar & ikon menu",
+    icon: "category",
   },
   {
     key: "hours",
@@ -342,6 +686,14 @@ function formatCurrencyIDR(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatPriceAdjustment(amount: number): string {
+  if (!amount) {
+    return "+Rp 0";
+  }
+  const formatted = formatCurrencyIDR(Math.abs(amount));
+  return amount > 0 ? `+${formatted}` : `-${formatted}`;
 }
 
 function formatTableCode(index: number): string {
@@ -494,6 +846,593 @@ export default function AdminPage() {
   const settingsHydratedRef = useRef(false);
   const [showLowStockConfig, setShowLowStockConfig] = useState(false);
   const [showStaffScheduleConfig, setShowStaffScheduleConfig] = useState(false);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [productForm, setProductForm] = useState<ProductFormState>(() => createEmptyProductForm());
+  const [products, setProducts] = useState<AdminProductRecord[]>(SAMPLE_PRODUCTS);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [productSubmitStatus, setProductSubmitStatus] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+  const isEditingProduct = Boolean(editingProductId);
+
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(() => [...DEFAULT_CATEGORY_OPTIONS]);
+  const [categoryIcons, setCategoryIcons] = useState<Record<string, string>>(() => ({ ...DEFAULT_CATEGORY_ICONS }));
+  const [savedCategoryOptions, setSavedCategoryOptions] = useState<string[]>(() => [...DEFAULT_CATEGORY_OPTIONS]);
+  const [savedCategoryIcons, setSavedCategoryIcons] = useState<Record<string, string>>(() => ({ ...DEFAULT_CATEGORY_ICONS }));
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState(DEFAULT_NEW_CATEGORY_ICON);
+  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
+  const fallbackCategory = categoryOptions[0] ?? "pistachio-series";
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        minimumFractionDigits: 0,
+      }),
+    []
+  );
+  const formattedPricePreview = useMemo(() => {
+    const numeric = Number(productForm.price || 0);
+    if (!numeric) {
+      return "Rp 0";
+    }
+    return currencyFormatter.format(numeric);
+  }, [productForm.price, currencyFormatter]);
+  const productImagePreview = productForm.imagePreviewUrl || productForm.imageUrl || "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      setIsLoadingProducts(false);
+      return;
+    }
+
+    const mergedOptions = [...DEFAULT_CATEGORY_OPTIONS];
+    const mergedIcons: Record<string, string> = { ...DEFAULT_CATEGORY_ICONS };
+
+    const ensureCategory = (slug: string, icon?: string) => {
+      if (!slug) {
+        return;
+      }
+      const normalized = slugifyCategoryName(slug);
+      if (!normalized) {
+        return;
+      }
+      if (!mergedOptions.includes(normalized)) {
+        mergedOptions.push(normalized);
+      }
+      const resolvedIcon = normalizeCategoryIcon(icon, normalized);
+      mergedIcons[normalized] = resolvedIcon;
+    };
+
+    let resolvedProducts: AdminProductRecord[] = SAMPLE_PRODUCTS;
+
+    try {
+      const storedCategories = window.localStorage.getItem(CATEGORIES_STORAGE_KEY);
+      if (storedCategories) {
+        const parsed = JSON.parse(storedCategories);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((entry) => {
+            if (typeof entry === "string") {
+              ensureCategory(entry);
+            } else if (entry && typeof entry === "object") {
+              const slug = typeof entry.slug === "string" ? entry.slug : "";
+              const icon = typeof entry.icon === "string" ? entry.icon : undefined;
+              ensureCategory(slug, icon);
+            }
+          });
+        } else if (parsed && typeof parsed === "object") {
+          const storedEntries = Array.isArray(parsed.categories)
+            ? parsed.categories
+            : [];
+          const iconOverrides =
+            parsed.icons && typeof parsed.icons === "object" ? parsed.icons : {};
+
+          storedEntries.forEach((entry) => {
+            if (typeof entry === "string") {
+              const override =
+                typeof iconOverrides[entry] === "string" ? iconOverrides[entry] : undefined;
+              ensureCategory(entry, override);
+            } else if (entry && typeof entry === "object") {
+              const slug = typeof entry.slug === "string" ? entry.slug : "";
+              const legacyIcon = typeof entry.icon === "string" ? entry.icon : undefined;
+              const override =
+                typeof iconOverrides[slug] === "string" ? iconOverrides[slug] : legacyIcon;
+              ensureCategory(slug, override);
+            }
+          });
+
+          Object.entries(iconOverrides).forEach(([slug, icon]) => {
+            if (typeof slug === "string" && typeof icon === "string") {
+              ensureCategory(slug, icon);
+            }
+          });
+        }
+      }
+
+      const storedProducts = window.localStorage.getItem(PRODUCTS_STORAGE_KEY);
+      if (storedProducts) {
+        const parsedProducts = JSON.parse(storedProducts) as AdminProductRecord[];
+        if (Array.isArray(parsedProducts) && parsedProducts.length > 0) {
+          resolvedProducts = parsedProducts;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load stored products", error);
+    }
+
+    resolvedProducts = resolvedProducts.map((item) => {
+      ensureCategory(item.category);
+      return {
+        ...item,
+        soldOut: Boolean(item.soldOut),
+      };
+    });
+
+    const uniqueOptions = Array.from(new Set(mergedOptions));
+    const iconSnapshot = { ...mergedIcons };
+
+    setCategoryOptions(uniqueOptions);
+    setCategoryIcons(iconSnapshot);
+    setSavedCategoryOptions(uniqueOptions);
+    setSavedCategoryIcons(iconSnapshot);
+    setProducts(resolvedProducts);
+    setIsLoadingProducts(false);
+  }, []);
+
+  useEffect(() => {
+    if (isLoadingProducts) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+    } catch (error) {
+      console.error("Failed to persist products", error);
+    }
+  }, [products, isLoadingProducts]);
+
+  const resetProductForm = (options?: { keepStatus?: boolean }) => {
+    setProductForm(createEmptyProductForm());
+    setEditingProductId(null);
+    if (!options?.keepStatus) {
+      setProductSubmitStatus(null);
+    }
+  };
+
+  const openAddProduct = () => {
+    resetProductForm();
+    setShowAddProduct(true);
+  };
+
+  const closeAddProduct = () => {
+    resetProductForm();
+    setShowAddProduct(false);
+  };
+
+  const openEditProduct = (product: AdminProductRecord) => {
+    setProductSubmitStatus(null);
+    const safeCategory = categoryOptions.includes(product.category)
+      ? product.category
+      : fallbackCategory;
+    if (!categoryOptions.includes(safeCategory)) {
+      setCategoryOptions((prev) => (prev.includes(safeCategory) ? prev : [...prev, safeCategory]));
+    }
+    setProductForm({
+      name: product.name,
+      category: safeCategory,
+      price: String(product.price),
+      description: product.description ?? "",
+      sku: product.sku ?? "",
+      imageUrl: product.imageUrl ?? "",
+      imagePreviewUrl: product.imageUrl ? product.imageUrl : null,
+      highlight: product.highlight ?? "",
+      isAvailable: product.isAvailable,
+      isFeatured: product.isFeatured,
+      soldOut: product.soldOut ?? false,
+      hotOption: product.hotOption,
+      icedOption: product.icedOption,
+      prepTime: product.prepTime ?? "",
+      calories: product.calories ?? "",
+      customizations: (product.customizations ?? []).map((group) => ({
+        ...group,
+        options: group.options.map((option) => ({ ...option })),
+      })),
+    });
+    setEditingProductId(product.id);
+    setShowAddProduct(true);
+  };
+
+  const handleProductInputChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = event.target;
+    if (name === "price") {
+      const sanitized = value.replace(/[^\d]/g, "");
+      setProductForm((prev) => ({ ...prev, price: sanitized }));
+      return;
+    }
+    setProductForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "imageUrl"
+        ? {
+            imagePreviewUrl: value ? value : null,
+          }
+        : {}),
+    }));
+  };
+
+  const handleProductSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const { value, name } = event.target;
+    setProductForm((prev) => ({
+      ...prev,
+      [name]: value as ProductCategory,
+    }));
+  };
+
+  const handleProductCheckboxChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = event.target;
+    setProductForm((prev) => {
+      const updated = { ...prev, [name]: checked } as ProductFormState;
+      if (name === "soldOut") {
+        if (checked) {
+          updated.isAvailable = false;
+        }
+      }
+      return updated;
+    });
+  };
+
+  const handleProductFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setProductForm((prev) => ({
+        ...prev,
+        imageUrl: "",
+        imagePreviewUrl: null,
+      }));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      setProductForm((prev) => ({
+        ...prev,
+        imageUrl: result,
+        imagePreviewUrl: result || prev.imagePreviewUrl,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const showCategoryMessage = (message: string, duration = 2000) => {
+    setCategoryMessage(message);
+    window.setTimeout(() => setCategoryMessage(null), duration);
+  };
+
+  const setCategoryIconValue = (slug: string, value: string | null | undefined) => {
+    if (!slug) {
+      return;
+    }
+    const normalizedIcon = normalizeCategoryIcon(value ?? "", slug);
+    setCategoryIcons((prev) => {
+      const next = { ...prev };
+      next[slug] = normalizedIcon;
+      return next;
+    });
+    setIsDirty(true);
+  };
+
+  const handleResetCategoryIcon = (slug: string) => {
+    const isDefault = DEFAULT_CATEGORY_OPTIONS.includes(slug);
+    const fallbackIcon = DEFAULT_CATEGORY_ICONS[slug] ?? DEFAULT_NEW_CATEGORY_ICON;
+    setCategoryIconValue(slug, fallbackIcon);
+    showCategoryMessage(
+      `Ikon kategori ${formatCategoryLabel(slug)} dikembalikan ke ${isDefault ? "ikon bawaan" : "ikon standar"}.`,
+      2000
+    );
+  };
+
+  const handleAddCategory = () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      showCategoryMessage("Masukkan nama kategori terlebih dahulu.");
+      return;
+    }
+
+    const slug = slugifyCategoryName(trimmed);
+    if (!slug) {
+      showCategoryMessage("Nama kategori tidak valid.");
+      return;
+    }
+
+    if (DEFAULT_CATEGORY_OPTIONS.includes(slug)) {
+      showCategoryMessage("Kategori bawaan sudah tersedia.");
+      return;
+    }
+
+    const iconValue = newCategoryIcon.trim();
+    const alreadyExists = categoryOptions.includes(slug);
+
+    if (!alreadyExists) {
+      setCategoryOptions((prev) => [...prev, slug]);
+    }
+
+    setCategoryIconValue(slug, iconValue);
+    setProductForm((prev) => ({ ...prev, category: slug }));
+    setNewCategoryName("");
+    setNewCategoryIcon(DEFAULT_NEW_CATEGORY_ICON);
+    setIsDirty(true);
+
+    showCategoryMessage(
+      alreadyExists
+        ? `Ikon kategori ${formatCategoryLabel(slug)} diperbarui.`
+        : `Kategori ${formatCategoryLabel(slug)} siap digunakan.`,
+      2200
+    );
+  };
+
+  const handleRemoveCategory = (slug: string) => {
+    if (DEFAULT_CATEGORY_OPTIONS.includes(slug)) {
+      showCategoryMessage("Kategori bawaan tidak bisa dihapus.");
+      return;
+    }
+
+    setCategoryOptions((prev) => prev.filter((item) => item !== slug));
+    setCategoryIcons((prev) => {
+      const next = { ...prev };
+      delete next[slug];
+      return next;
+    });
+    setProducts((prev) => prev.map((product) => (product.category === slug ? { ...product, category: fallbackCategory } : product)));
+    setProductForm((prev) => (prev.category === slug ? { ...prev, category: fallbackCategory } : prev));
+    showCategoryMessage("Kategori dihapus dari daftar. Produk yang menggunakan kategori tersebut dipindah ke kategori default.", 2200);
+    setIsDirty(true);
+  };
+
+  const handleCustomizationGroupUpdate = (
+    groupId: string,
+    updater: (group: CustomizationGroup) => CustomizationGroup
+  ) => {
+    setProductForm((prev) => ({
+      ...prev,
+      customizations: prev.customizations.map((group) =>
+        group.id === groupId ? updater(group) : group
+      ),
+    }));
+  };
+
+  const handleGroupFieldChange = <K extends keyof CustomizationGroup>(
+    groupId: string,
+    field: K,
+    value: CustomizationGroup[K]
+  ) => {
+    handleCustomizationGroupUpdate(groupId, (group) => ({
+      ...group,
+      [field]: value,
+    }));
+  };
+
+  const handleOptionFieldChange = (
+    groupId: string,
+    optionId: string,
+    field: keyof CustomizationOption,
+    value: string
+  ) => {
+    handleCustomizationGroupUpdate(groupId, (group) => ({
+      ...group,
+      options: group.options.map((option) =>
+        option.id === optionId
+          ? {
+              ...option,
+              [field]: field === "priceAdjustment" ? Number(value || 0) : value,
+            }
+          : option
+      ),
+    }));
+  };
+
+  const handleOptionPriceInputChange = (
+    groupId: string,
+    optionId: string,
+    rawValue: string
+  ) => {
+    let sanitized = rawValue.replace(/[^0-9-]/g, "");
+    if (sanitized.startsWith("-")) {
+      sanitized = "-" + sanitized.slice(1).replace(/[^0-9]/g, "");
+    } else {
+      sanitized = sanitized.replace(/[^0-9]/g, "");
+    }
+
+    const numeric = sanitized === "" || sanitized === "-" ? 0 : Number(sanitized);
+
+    handleCustomizationGroupUpdate(groupId, (group) => ({
+      ...group,
+      options: group.options.map((option) =>
+        option.id === optionId ? { ...option, priceAdjustment: numeric } : option
+      ),
+    }));
+  };
+
+  const handleRemoveOption = (groupId: string, optionId: string) => {
+    handleCustomizationGroupUpdate(groupId, (group) => ({
+      ...group,
+      options: group.options.filter((option) => option.id !== optionId),
+    }));
+  };
+
+  const handleAddOption = (groupId: string) => {
+    handleCustomizationGroupUpdate(groupId, (group) => ({
+      ...group,
+      options: [
+        ...group.options,
+        {
+          id: createId("opt"),
+          label: `Pilihan ${group.options.length + 1}`,
+          priceAdjustment: 0,
+        },
+      ],
+    }));
+  };
+
+  const handleRemoveGroup = (groupId: string) => {
+    setProductForm((prev) => ({
+      ...prev,
+      customizations: prev.customizations.filter((group) => group.id !== groupId),
+    }));
+  };
+
+  const handleResetCategories = () => {
+    const fallback = DEFAULT_CATEGORY_OPTIONS[0] ?? "pistachio-series";
+    setCategoryOptions([...DEFAULT_CATEGORY_OPTIONS]);
+    setCategoryIcons({ ...DEFAULT_CATEGORY_ICONS });
+    setProducts((prev) =>
+      prev.map((product) =>
+        DEFAULT_CATEGORY_OPTIONS.includes(product.category)
+          ? product
+          : { ...product, category: fallback }
+      )
+    );
+    setProductForm((prev) =>
+      DEFAULT_CATEGORY_OPTIONS.includes(prev.category)
+        ? prev
+        : { ...prev, category: fallback }
+    );
+    setNewCategoryName("");
+    setNewCategoryIcon(DEFAULT_NEW_CATEGORY_ICON);
+    showCategoryMessage("Kategori dikembalikan ke default.", 2000);
+    setIsDirty(true);
+  };
+
+  const addEmptyCustomizationGroup = () => {
+    setProductForm((prev) => ({
+      ...prev,
+      customizations: [
+        ...prev.customizations,
+        {
+          id: createId("cst"),
+          name: "Variasi Baru",
+          type: "single",
+          required: false,
+          helperText: "",
+          options: [
+            { id: createId("opt"), label: "Pilihan 1", priceAdjustment: 0 },
+            { id: createId("opt"), label: "Pilihan 2", priceAdjustment: 0 },
+          ],
+        },
+      ],
+    }));
+  };
+
+  const applyCustomizationTemplate = (templateKey: string) => {
+    const template = CUSTOMIZATION_TEMPLATES.find((item) => item.key === templateKey);
+    if (!template) {
+      return;
+    }
+    const group: CustomizationGroup = {
+      id: createId("cst"),
+      ...template.group,
+      options: template.group.options.map((option) => ({
+        id: createId("opt"),
+        label: option.label,
+        priceAdjustment: option.priceAdjustment,
+      })),
+    };
+    setProductForm((prev) => ({
+      ...prev,
+      customizations: [...prev.customizations, group],
+    }));
+  };
+
+  const handleProductSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProductSubmitStatus(null);
+    setIsSavingProduct(true);
+    try {
+      const parsedPrice = Number(productForm.price || 0);
+      if (!parsedPrice || Number.isNaN(parsedPrice)) {
+        throw new Error("Harga produk belum diisi dengan benar.");
+      }
+
+      const imageUrl = productForm.imageUrl.trim();
+      if (!imageUrl) {
+        throw new Error("Harap unggah atau isi URL gambar produk.");
+      }
+
+      const normalizedCustomizations = productForm.customizations.map((group) => ({
+        ...group,
+        options: group.options.map((option) => ({ ...option })),
+      }));
+
+      const baseProduct = {
+        name: productForm.name.trim(),
+        category: productForm.category,
+        price: parsedPrice,
+        description: productForm.description.trim(),
+        sku: productForm.sku.trim(),
+        imageUrl,
+        highlight: productForm.highlight.trim(),
+        isAvailable: productForm.soldOut ? false : productForm.isAvailable,
+        isFeatured: productForm.isFeatured,
+        soldOut: productForm.soldOut,
+        hotOption: productForm.hotOption,
+        icedOption: productForm.icedOption,
+        prepTime: productForm.prepTime.trim(),
+        calories: productForm.calories.trim(),
+        customizations: normalizedCustomizations,
+      };
+
+      if (!categoryOptions.includes(baseProduct.category)) {
+        setCategoryOptions((prev) => (prev.includes(baseProduct.category) ? prev : [...prev, baseProduct.category]));
+      }
+
+      if (editingProductId) {
+        setProducts((prev) =>
+          prev.map((item) =>
+            item.id === editingProductId
+              ? {
+                  ...item,
+                  ...baseProduct,
+                  category: baseProduct.category,
+                }
+              : item
+          )
+        );
+        setProductSubmitStatus({
+          type: "success",
+          message: "Perubahan produk tersimpan.",
+        });
+      } else {
+        const newProduct: AdminProductRecord = {
+          id: `prd_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          ...baseProduct,
+          createdAt: new Date().toISOString(),
+        };
+        setProducts((prev) => [newProduct, ...prev]);
+        setProductSubmitStatus({
+          type: "success",
+          message: "Produk berhasil ditambahkan ke katalog.",
+        });
+        resetProductForm({ keepStatus: true });
+      }
+    } catch (error) {
+      console.error("Product submission error", error);
+      setProductSubmitStatus({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan produk.",
+      });
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
 
   const handleStoreFieldChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
@@ -796,9 +1735,22 @@ export default function AdminPage() {
     try {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...settings, adminAccounts }));
+
+        const uniqueCategories = Array.from(new Set(categoryOptions));
+        const payload = {
+          version: CATEGORIES_STORAGE_VERSION,
+          categories: uniqueCategories,
+          icons: Object.fromEntries(
+            uniqueCategories.map((slug) => [slug, resolveCategoryIcon(slug, categoryIcons)])
+          ),
+        };
+        window.localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(payload));
+        window.dispatchEvent(new Event("spm:categories-updated"));
       }
       setSavedSettings(settings);
       setSavedAdminAccounts(adminAccounts);
+      setSavedCategoryOptions([...categoryOptions]);
+      setSavedCategoryIcons({ ...categoryIcons });
       setIsDirty(false);
       setSaveMessage("Perubahan disimpan.");
       window.setTimeout(() => setSaveMessage(null), 2600);
@@ -807,7 +1759,7 @@ export default function AdminPage() {
     } finally {
       setPendingSave(false);
     }
-  }, [pendingSave, settings, adminAccounts]);
+  }, [pendingSave, settings, adminAccounts, categoryOptions, categoryIcons]);
 
   useEffect(() => {
     setPreviewSummary(computePreviewSummary(backupRange, customRangeStart, customRangeEnd));
@@ -954,6 +1906,11 @@ export default function AdminPage() {
     if (!savedSettings) return;
     setSettings(savedSettings);
     setAdminAccounts(savedAdminAccounts);
+    setCategoryOptions([...savedCategoryOptions]);
+    setCategoryIcons({ ...savedCategoryIcons });
+    setNewCategoryName("");
+    setNewCategoryIcon(DEFAULT_NEW_CATEGORY_ICON);
+    setCategoryMessage(null);
     setIsDirty(false);
     setSaveMessage("Perubahan dibatalkan.");
     window.setTimeout(() => setSaveMessage(null), 1800);
@@ -967,6 +1924,630 @@ export default function AdminPage() {
     } catch (e) {
       console.error("Clipboard error", e);
     }
+  };
+
+  const renderProductModal = () => {
+    if (!showAddProduct) {
+      return null;
+    }
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 py-6">
+        <div className="absolute inset-0" aria-hidden="true" onClick={closeAddProduct} />
+        <div className="relative z-10 w-full max-w-5xl">
+          <div className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-transparent to-blue-50" />
+            <div className="relative max-h-[85vh] overflow-y-auto">
+              <div className="flex items-start justify-between gap-4 border-b border-emerald-100/60 px-6 py-5 lg:px-10">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">
+                    {isEditingProduct ? "Edit Produk" : "Produk Baru"}
+                  </p>
+                  <h2 className="text-xl font-semibold text-gray-800">
+                    {isEditingProduct ? "Perbarui Informasi Produk" : "Tambah Produk"}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {isEditingProduct
+                      ? "Ubah detail produk agar katalog selalu up-to-date."
+                      : "Lengkapi detail berikut untuk memasukkan produk ke katalog digital."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAddProduct}
+                  className="rounded-full border border-emerald-100 bg-white/70 p-2 text-emerald-500 shadow-sm hover:bg-emerald-50 transition"
+                >
+                  <span className="material-symbols-outlined text-xl">close</span>
+                </button>
+              </div>
+              <div className="relative grid gap-6 px-6 py-6 lg:grid-cols-[1.7fr,1fr] lg:px-10 lg:py-8">
+                <form className="space-y-6" onSubmit={handleProductSubmit}>
+                  <div className="space-y-4 rounded-2xl border border-emerald-50 bg-white/90 p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-700">Informasi Utama</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="flex flex-col gap-2 text-sm text-gray-600">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                          Nama Produk
+                        </span>
+                        <input
+                          name="name"
+                          value={productForm.name}
+                          onChange={handleProductInputChange}
+                          placeholder="Contoh: Pistachio Latte"
+                          className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                          required
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 text-sm text-gray-600">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                          Kategori
+                        </span>
+                        <select
+                          name="category"
+                          value={productForm.category}
+                          onChange={handleProductSelectChange}
+                          className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                        >
+                          {categoryOptions.map((category) => (
+                            <option key={category} value={category}>
+                              {formatCategoryLabel(category)}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-3 text-xs text-gray-500">
+                          Kategori dikelola melalui menu Pengaturan &rarr; Kategori Produk.
+                        </p>
+                      </label>
+                    </div>
+                    <label className="flex flex-col gap-2 text-sm text-gray-600">
+                      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                        Deskripsi
+                      </span>
+                      <textarea
+                        name="description"
+                        value={productForm.description}
+                        onChange={handleProductInputChange}
+                        placeholder="Tuliskan deskripsi singkat yang menggugah selera…"
+                        rows={4}
+                        className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm text-gray-600">
+                      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                        Highlight / Selling Point
+                      </span>
+                      <input
+                        name="highlight"
+                        value={productForm.highlight}
+                        onChange={handleProductInputChange}
+                        placeholder="Contoh: Signature roasted pistachio cream"
+                        className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border border-emerald-50 bg-white/90 p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-700">Detail Tambahan</p>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+                        <span className="material-symbols-outlined text-sm">info</span>
+                        Opsional
+                      </span>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                        <label className="flex flex-col gap-2 text-sm text-gray-600">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Unggah Gambar Produk
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleProductFileChange}
+                            className="block w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-emerald-600 hover:file:bg-emerald-200"
+                          />
+                        </label>
+                        <div className="space-y-2 text-xs text-gray-500">
+                          <p className="font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            atau gunakan URL gambar
+                          </p>
+                          <input
+                            name="imageUrl"
+                            value={productForm.imageUrl}
+                            onChange={handleProductInputChange}
+                            placeholder="https://…"
+                            className="rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                          />
+                          <p>Pilih salah satu metode agar katalog menyimpan gambar produk.</p>
+                        </div>
+                      </div>
+                      <div className="grid gap-4">
+                        <label className="flex flex-col gap-2 text-sm text-gray-600">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Waktu Penyajian (menit)
+                          </span>
+                          <input
+                            name="prepTime"
+                            value={productForm.prepTime}
+                            onChange={handleProductInputChange}
+                            placeholder="Contoh: 7"
+                            className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                          />
+                          <p className="text-xs text-gray-400">Tampil di aplikasi staff sebagai estimasi penyajian.</p>
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-gray-600">
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Kalori (opsional)
+                          </span>
+                          <input
+                            name="calories"
+                            value={productForm.calories}
+                            onChange={handleProductInputChange}
+                            placeholder="Contoh: 320"
+                            className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                          />
+                          <p className="text-xs text-gray-400">Berguna untuk pelanggan yang memantau nutrisi.</p>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5 rounded-2xl border border-emerald-50 bg-white/90 p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-700">Pengaturan Menu</p>
+                      <span className="text-xs text-gray-400">Kontrol visibilitas & opsi penyajian</span>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {[
+                        {
+                          name: "isAvailable" as const,
+                          title: "Aktif di katalog",
+                          description: "Produk dapat dipesan pelanggan.",
+                          icon: "storefront",
+                          accent: "from-emerald-100 via-emerald-50 to-white",
+                          checked: productForm.isAvailable,
+                        },
+                        {
+                          name: "isFeatured" as const,
+                          title: "Tandai sebagai unggulan",
+                          description: "Tampilkan di bagian rekomendasi.",
+                          icon: "star",
+                          accent: "from-emerald-100 via-white to-emerald-50",
+                          checked: productForm.isFeatured,
+                        },
+                        {
+                          name: "soldOut" as const,
+                          title: "Tandai habis",
+                          description: "Sembunyikan tombol pesan pada aplikasi pelanggan.",
+                          icon: "inventory_2",
+                          accent: "from-red-100 via-red-50 to-white",
+                          checked: productForm.soldOut,
+                        },
+                        {
+                          name: "hotOption" as const,
+                          title: "Tersedia pilihan panas",
+                          description: "Pelanggan bisa memesan versi hot.",
+                          icon: "local_cafe",
+                          accent: "from-orange-100 via-white to-orange-50",
+                          checked: productForm.hotOption,
+                        },
+                        {
+                          name: "icedOption" as const,
+                          title: "Tersedia pilihan dingin",
+                          description: "Sediakan varian iced / cold brew.",
+                          icon: "ac_unit",
+                          accent: "from-blue-100 via-white to-blue-50",
+                          checked: productForm.icedOption,
+                        },
+                      ].map((item) => {
+                        const disableAvailability = item.name === "isAvailable" && productForm.soldOut;
+                        const iconColor = item.name === "soldOut" ? "text-red-500" : "text-emerald-500";
+                        const containerClasses = [
+                          "group relative overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br px-4 py-4 text-sm text-gray-600 shadow-sm transition",
+                          item.accent,
+                          disableAvailability ? "opacity-60 cursor-not-allowed" : "hover:shadow-md",
+                        ].join(" ");
+                        return (
+                          <label key={item.name} className={containerClasses}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <div className="rounded-2xl bg-white/80 p-2 shadow-sm">
+                                  <span className={`material-symbols-outlined text-base ${iconColor}`}>
+                                    {item.icon}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-gray-700">{item.title}</p>
+                                  <p className="text-xs text-gray-500">{item.description}</p>
+                                  {item.name === "soldOut" ? (
+                                    <p className="mt-1 text-[11px] text-red-500">Produk akan ditandai habis di aplikasi pelanggan.</p>
+                                  ) : null}
+                                  {disableAvailability ? (
+                                    <p className="mt-1 text-[11px] text-red-500">Matikan status habis untuk mengaktifkan kembali.</p>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <input
+                                type="checkbox"
+                                name={item.name}
+                                checked={item.checked}
+                                onChange={handleProductCheckboxChange}
+                                disabled={disableAvailability}
+                                className="h-5 w-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                              />
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-5 rounded-2xl border border-emerald-50 bg-white/90 p-5 shadow-sm">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-700">Kustomisasi Pelanggan</p>
+                        <p className="text-xs text-gray-500">
+                          Tambahkan opsi seperti ukuran gelas, level es, atau topping agar pelanggan bisa request sesuai preferensi.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {CUSTOMIZATION_TEMPLATES.map((template) => (
+                          <button
+                            key={template.key}
+                            type="button"
+                            onClick={() => applyCustomizationTemplate(template.key)}
+                            className="rounded-full border border-emerald-200 bg-white/70 px-3 py-1.5 text-xs font-semibold text-emerald-600 shadow-sm transition hover:bg-emerald-50"
+                          >
+                            {template.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={addEmptyCustomizationGroup}
+                          className="rounded-full border border-emerald-200 bg-white/70 px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm transition hover:bg-emerald-50"
+                        >
+                          Tambah Manual
+                        </button>
+                      </div>
+                    </div>
+
+                    {productForm.customizations.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 px-4 py-6 text-sm text-emerald-600">
+                        Belum ada opsi kustomisasi. Gunakan template di atas agar admin tidak perlu mengetik ulang permintaan pelanggan yang umum.
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        {productForm.customizations.map((group, index) => (
+                          <div
+                            key={group.id}
+                            className="rounded-3xl border border-emerald-100 bg-white shadow-[0_12px_30px_-18px_rgba(16,185,129,0.35)] overflow-hidden"
+                          >
+                            <div className="bg-gradient-to-r from-emerald-50 via-white to-transparent px-5 py-4 space-y-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
+                                <div className="flex-1 space-y-3">
+                                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                    Nama Grup
+                                    <input
+                                      value={group.name}
+                                      onChange={(event) => handleGroupFieldChange(group.id, "name", event.target.value)}
+                                      className="mt-1 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                  </label>
+                                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                    Catatan (opsional)
+                                    <input
+                                      value={group.helperText ?? ""}
+                                      onChange={(event) => handleGroupFieldChange(group.id, "helperText", event.target.value)}
+                                      placeholder="Contoh: Pilih maksimal 2 topping"
+                                      className="mt-1 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                    />
+                                  </label>
+                                </div>
+                                <div className="grid gap-3 sm:w-64">
+                                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                    Tipe Pilihan
+                                    <select
+                                      value={group.type}
+                                      onChange={(event) => handleGroupFieldChange(group.id, "type", event.target.value as CustomizationGroup["type"])}
+                                      className="mt-1 rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                    >
+                                      <option value="single">Pilih satu</option>
+                                      <option value="multiple">Boleh banyak</option>
+                                    </select>
+                                  </label>
+                                  <label className="inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-sm text-gray-600 shadow-sm">
+                                    <input
+                                      type="checkbox"
+                                      checked={group.required}
+                                      onChange={(event) => handleGroupFieldChange(group.id, "required", event.target.checked)}
+                                      className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                    />
+                                    Wajib dipilih pelanggan
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-600">
+                                <div className="flex items-center gap-2">
+                                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                                    {group.type === "single" ? "Pilih satu" : "Boleh banyak"}
+                                  </span>
+                                  {group.required ? (
+                                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                                      Wajib
+                                    </span>
+                                  ) : null}
+                                  <span className="text-gray-400">Set #{index + 1}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveGroup(group.id)}
+                                  className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 shadow-sm transition hover:bg-red-100"
+                                >
+                                  Hapus Grup
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-3 px-5 py-4">
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Daftar Pilihan</p>
+                              <div className="space-y-3">
+                                {group.options.map((option) => (
+                                  <div
+                                    key={option.id}
+                                    className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm"
+                                  >
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                                      <div className="flex-1">
+                                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                          Nama Pilihan
+                                          <input
+                                            value={option.label}
+                                            onChange={(event) => handleOptionFieldChange(group.id, option.id, "label", event.target.value)}
+                                            placeholder="Contoh: Extra Shot"
+                                            className="mt-1 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                          />
+                                        </label>
+                                      </div>
+                                      <div className="w-full sm:w-48">
+                                        <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                          Penyesuaian Harga
+                                          <div className="mt-1 flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 shadow-inner">
+                                            <span className="text-sm font-semibold text-gray-500">Rp</span>
+                                            <input
+                                              type="text"
+                                              inputMode="numeric"
+                                              pattern="-?[0-9]*"
+                                              value={option.priceAdjustment === 0 ? "" : option.priceAdjustment.toString()}
+                                              onChange={(event) => handleOptionPriceInputChange(group.id, option.id, event.target.value)}
+                                              className="w-full border-none bg-transparent text-sm font-semibold text-gray-700 focus:outline-none"
+                                              placeholder="0"
+                                            />
+                                          </div>
+                                        </label>
+                                        <p className="text-[11px] text-emerald-500 mt-1">
+                                          Ditampilkan sebagai {formatPriceAdjustment(option.priceAdjustment)}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveOption(group.id, option.id)}
+                                        className="self-start rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-500 shadow-sm transition hover:bg-red-100"
+                                      >
+                                        Hapus
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddOption(group.id)}
+                                  className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-600 shadow-sm transition hover:bg-emerald-50"
+                                >
+                                  Tambah Pilihan
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    {productSubmitStatus ? (
+                      <div
+                        className={`order-last sm:order-first inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm shadow-sm ${
+                          productSubmitStatus.type === "success"
+                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border border-red-200 bg-red-50 text-red-600"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">
+                          {productSubmitStatus.type === "success" ? "task_alt" : "error"}
+                        </span>
+                        {productSubmitStatus.message}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={closeAddProduct}
+                      className="order-2 rounded-full border border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-100 transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingProduct}
+                      className="order-1 sm:order-last inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isSavingProduct ? (
+                        <>
+                          <span className="material-symbols-outlined animate-spin text-base">
+                            progress_activity
+                          </span>
+                          Menyimpan…
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-base">check_small</span>
+                          {isEditingProduct ? "Simpan Perubahan" : "Simpan Produk"}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                <aside className="space-y-4">
+                  <div className="overflow-hidden rounded-3xl border border-emerald-100 bg-emerald-50/60 shadow-inner">
+                    <div className="relative h-48 bg-gradient-to-br from-emerald-200 via-emerald-100 to-white">
+                      {productImagePreview ? (
+                        <img
+                          src={productImagePreview}
+                          alt={productForm.name || "Preview produk"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm text-emerald-700">
+                          Preview gambar akan muncul di sini
+                        </div>
+                      )}
+                      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between rounded-2xl bg-white/90 px-4 py-2 shadow-lg">
+                        <span className="text-sm font-semibold text-emerald-600">
+                          {formattedPricePreview}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {productForm.soldOut ? (
+                            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
+                              Habis
+                            </span>
+                          ) : null}
+                          <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-2.5 py-1">
+                            <CategoryIcon
+                              value={resolveCategoryIcon(productForm.category, categoryIcons)}
+                              className="text-sm text-emerald-600"
+                            />
+                          </span>
+                          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            {formatCategoryLabel(productForm.category)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3 px-5 py-6">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">
+                          {productForm.name || "Nama Produk"}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {productForm.description || "Deskripsi singkat produk akan tampil di sini."}
+                        </p>
+                      </div>
+                      {productForm.highlight ? (
+                        <div className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-emerald-600 shadow-sm">
+                          <span className="material-symbols-outlined text-base">sparkles</span>
+                          {productForm.highlight}
+                        </div>
+                      ) : null}
+                      {productForm.soldOut ? (
+                        <div className="flex items-center gap-2 rounded-2xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 shadow-sm">
+                          <span className="material-symbols-outlined text-base">report</span>
+                          Produk ditandai habis — pelanggan tidak dapat memesan.
+                        </div>
+                      ) : null}
+                      {productForm.customizations.length ? (
+                        <div className="space-y-2 rounded-2xl border border-emerald-100 bg-white/80 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                            Pilihan Request
+                          </p>
+                          <div className="space-y-2">
+                            {productForm.customizations.map((group) => (
+                              <div key={group.id} className="text-xs text-gray-600">
+                                <p className="font-semibold text-gray-700">
+                                  {group.name} {group.required ? <span className="text-emerald-500">(wajib)</span> : null}
+                                </p>
+                                <p className="text-[11px] text-gray-400">
+                                  {group.helperText || (group.type === "single" ? "Pilih salah satu" : "Boleh lebih dari satu")}
+                                </p>
+                                <ul className="mt-1 flex flex-wrap gap-1">
+                                  {group.options.map((option) => (
+                                    <li
+                                      key={option.id}
+                                      className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-600"
+                                    >
+                                      {option.label || "Tanpa nama"}
+                                      {option.priceAdjustment !== 0 ? (
+                                        <span className="ml-1 text-[10px] font-medium text-emerald-500">
+                                          {formatPriceAdjustment(option.priceAdjustment)}
+                                        </span>
+                                      ) : null}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400">
+                          Belum ada kustomisasi pelanggan. Gunakan template untuk meniru pengalaman order seperti di menu pelanggan.
+                        </p>
+                      )}
+                      <div className="grid gap-3 text-xs text-gray-500">
+                        <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                          <span className="material-symbols-outlined text-base text-emerald-500">schedule</span>
+                          <span>{productForm.prepTime ? `${productForm.prepTime} menit` : "Estimasi waktu belum diisi"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                          <span className="material-symbols-outlined text-base text-emerald-500">local_fire_department</span>
+                          <span>{productForm.calories ? `${productForm.calories} kkal` : "Informasi kalori opsional"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                          <span className="material-symbols-outlined text-base text-emerald-500">coffee</span>
+                          <span>
+                            {[
+                              productForm.hotOption ? "Hot" : null,
+                              productForm.icedOption ? "Iced" : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" & ") || "Pilih varian penyajian"}
+                          </span>
+                        </div>
+                        <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${
+                          productForm.soldOut
+                            ? "border-red-200 bg-red-50"
+                            : "border-emerald-100 bg-white/80"
+                        }`}>
+                          <span className={`material-symbols-outlined text-base ${
+                            productForm.soldOut ? "text-red-500" : "text-emerald-500"
+                          }`}>
+                            {productForm.soldOut ? "block" : productForm.isAvailable ? "task_alt" : "event_busy"}
+                          </span>
+                          <span className={productForm.soldOut ? "text-red-600" : "text-gray-600"}>
+                            {productForm.soldOut
+                              ? "Produk ditandai habis dan tidak dapat dipesan"
+                              : productForm.isAvailable
+                              ? "Produk aktif dan siap dipesan"
+                              : "Produk sedang disembunyikan"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-white/90 p-4 text-xs text-gray-500 shadow-sm space-y-2">
+                    <p className="font-semibold text-gray-700">Tips Katalog</p>
+                    <p>Gunakan foto resolusi tinggi agar tampilan menu terasa profesional.</p>
+                    <p>Tambahkan tag maksimal 5 kata kunci untuk memudahkan pencarian.</p>
+                    <p>Highlight singkat membantu pelanggan mengetahui keistimewaan produk.</p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (!isAdmin) {
@@ -1146,6 +2727,7 @@ export default function AdminPage() {
                 </div>
                 <button
                   type="button"
+                  onClick={openAddProduct}
                   className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600 transition"
                 >
                   Tambah Produk
@@ -1162,37 +2744,68 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-emerald-50 bg-white/60">
-                    {[
-                      {
-                        name: "Pistachio Latte",
-                        category: "Pistachio Series",
-                        price: "Rp 55.000",
-                      },
-                      {
-                        name: "Matcha Frappe",
-                        category: "Matcha Club",
-                        price: "Rp 52.500",
-                      },
-                      {
-                        name: "Ethiopia Yirgacheffe",
-                        category: "Master S.O.E Series",
-                        price: "Rp 150.000",
-                      },
-                    ].map((row) => (
-                      <tr key={row.name} className="text-gray-600">
-                        <td className="px-4 py-3 font-medium text-gray-700">{row.name}</td>
-                        <td className="px-4 py-3">{row.category}</td>
-                        <td className="px-4 py-3 text-right">{row.price}</td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            type="button"
-                            className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
-                          >
-                            Edit
-                          </button>
+                    {isLoadingProducts ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">
+                          Memuat data produk…
                         </td>
                       </tr>
-                    ))}
+                    ) : products.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                          Belum ada produk di katalog. Tambahkan produk baru untuk mulai menjual.
+                        </td>
+                      </tr>
+                    ) : (
+                      products.map((product) => (
+                        <tr key={product.id} className="text-gray-600">
+                          <td className="px-4 py-3 font-medium text-gray-700">
+                            {product.name}
+                            {product.soldOut ? (
+                              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600">
+                                <span className="material-symbols-outlined text-[13px]">block</span>
+                                Habis
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-2 py-1 text-emerald-600">
+                                <CategoryIcon
+                                  value={resolveCategoryIcon(product.category, categoryIcons)}
+                                  className="text-sm"
+                                />
+                              </span>
+                              <div>
+                                <p className="font-medium text-gray-600">
+                                  {formatCategoryLabel(product.category)}
+                                </p>
+                                {product.customizations?.length ? (
+                                  <p className="text-xs text-emerald-500 mt-1">
+                                    {product.customizations.length} set permintaan pelanggan
+                                  </p>
+                                ) : null}
+                                {product.soldOut ? (
+                                  <p className="text-xs text-red-500 mt-1">Tidak dapat dipesan — stok habis.</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right align-top">
+                            {currencyFormatter.format(product.price)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => openEditProduct(product)}
+                              className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1560,6 +3173,174 @@ export default function AdminPage() {
                             onChange={handleStoreFieldChange}
                             className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                           />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeSettingsSection === "categories" ? (
+                    <div className="rounded-3xl border border-emerald-100 bg-white/85 shadow-sm p-6 space-y-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Menu Digital</p>
+                          <h3 className="text-lg font-semibold text-gray-700">Kategori Produk</h3>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Pilih ikon yang konsisten agar pelanggan mudah mengenali setiap kategori di menu.
+                          </p>
+                        </div>
+                        <span className="material-symbols-outlined text-emerald-500 text-2xl">category</span>
+                      </div>
+
+                      {categoryMessage ? (
+                        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-600 shadow-sm">
+                          {categoryMessage}
+                        </div>
+                      ) : null}
+
+                      <div className="grid gap-6 xl:grid-cols-[minmax(0,320px)_1fr]">
+                        <div className="space-y-4">
+                          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5 shadow-inner space-y-4">
+                            <div>
+                              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                Nama kategori baru
+                              </label>
+                              <input
+                                value={newCategoryName}
+                                onChange={(event) => setNewCategoryName(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    handleAddCategory();
+                                  }
+                                }}
+                                placeholder="Contoh: Seasonal Drinks"
+                                className="mt-1 w-full rounded-xl border border-emerald-100 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                                Pilih ikon kategori
+                              </label>
+                              <div className="mt-2 flex items-center gap-3">
+                                <select
+                                  value={newCategoryIcon}
+                                  onChange={(event) => setNewCategoryIcon(event.target.value)}
+                                  className="flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                >
+                                  {CATEGORY_ICON_CHOICES.map((icon) => (
+                                    <option key={icon} value={icon}>
+                                      {icon}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100">
+                                  <CategoryIcon value={newCategoryIcon} className="text-base" />
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={handleAddCategory}
+                                className="rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-600 shadow-sm transition hover:bg-emerald-50"
+                              >
+                                Tambah kategori
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleResetCategories}
+                                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-500 shadow-sm transition hover:bg-gray-100"
+                              >
+                                Reset ke default
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-gray-500">
+                              Gunakan ikon yang sama dengan tema produk agar navigasi menu terasa konsisten.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {categoryOptions.map((category) => {
+                            const iconValue = resolveCategoryIcon(category, categoryIcons);
+                            const trimmedIconValue = iconValue.trim() || DEFAULT_NEW_CATEGORY_ICON;
+                            const optionCandidates = CATEGORY_ICON_CHOICES.includes(trimmedIconValue)
+                              ? CATEGORY_ICON_CHOICES
+                              : [trimmedIconValue, ...CATEGORY_ICON_CHOICES];
+                            const selectOptions = Array.from(new Set(optionCandidates));
+                            const isDefaultCategory = DEFAULT_CATEGORY_OPTIONS.includes(category);
+
+                            return (
+                              <div
+                                key={category}
+                                className="rounded-3xl border border-emerald-100 bg-white/90 px-5 py-4 shadow-sm transition hover:shadow-md"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                                      <CategoryIcon value={iconValue} className="text-base" />
+                                    </span>
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-800">
+                                        {formatCategoryLabel(category)}
+                                      </p>
+                                      <p className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
+                                        {category}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] ${
+                                      isDefaultCategory
+                                        ? "bg-emerald-100 text-emerald-600"
+                                        : "bg-slate-100 text-slate-500"
+                                    }`}
+                                  >
+                                    {isDefaultCategory ? "Default" : "Custom"}
+                                  </span>
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap items-center gap-3">
+                                  <div className="space-y-1">
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-gray-500">
+                                      Material icon
+                                    </p>
+                                    <select
+                                      value={trimmedIconValue}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setCategoryIconValue(category, value);
+                                        showCategoryMessage(`Ikon kategori ${formatCategoryLabel(category)} diperbarui.`, 1800);
+                                      }}
+                                      className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                    >
+                                      {selectOptions.map((icon) => (
+                                        <option key={icon} value={icon}>
+                                          {icon}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResetCategoryIcon(category)}
+                                    className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-500 shadow-sm transition hover:bg-gray-100"
+                                  >
+                                    Reset ikon
+                                  </button>
+                                  {!isDefaultCategory ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCategory(category)}
+                                      className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-500 shadow-sm transition hover:bg-red-100"
+                                    >
+                                      Hapus kategori
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -2346,6 +4127,7 @@ export default function AdminPage() {
         </main>
       </div>
       </div>
+      {renderProductModal()}
       {showClearConfirm || pendingToggleSlug || pendingDeleteTable ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">

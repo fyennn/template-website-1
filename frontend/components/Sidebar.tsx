@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { CategoryIcon } from "@/components/CategoryIcon";
 import type { NavigationItem } from "@/lib/navigation";
 
 export type SidebarProps = {
@@ -41,11 +42,10 @@ export function Sidebar({ items, activeSlug }: SidebarProps) {
                 aria-current={isActive ? "page" : undefined}
                 aria-label={item.label}
               >
-                <span
-                  className={`material-symbols-outlined category-link__icon${isAll ? " category-link__icon--solo" : ""}`}
-                >
-                  {item.icon}
-                </span>
+                <CategoryIcon
+                  value={item.icon}
+                  className={`category-link__icon${isAll ? " category-link__icon--solo" : ""}`}
+                />
                 {!isAll ? item.label : null}
               </Link>
             );
