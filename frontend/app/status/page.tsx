@@ -6,9 +6,29 @@ import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useOrders } from "@/lib/orderStore";
 
+function splitCurrency(label?: string | null) {
+  if (!label) {
+    return { currency: "", amount: "" };
+  }
+  const trimmed = label.trim();
+  if (!trimmed) {
+    return { currency: "", amount: "" };
+  }
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) {
+    return { currency: "", amount: parts[0] ?? "" };
+  }
+  const [currency, ...rest] = parts;
+  return {
+    currency,
+    amount: rest.join(" "),
+  };
+}
+
 export default function OrderStatusPage() {
   const searchParams = useSearchParams();
   const orderId = searchParams?.get("orderId") ?? null;
+  const tableQuery = searchParams?.get("table") ?? null;
   const { orders } = useOrders();
 
   const order = useMemo(() => {
@@ -18,6 +38,12 @@ export default function OrderStatusPage() {
     return orders.find((entry) => entry.id === orderId) ?? null;
   }, [orders, orderId]);
 
+  const tableSlug = order?.tableId ?? (tableQuery ? tableQuery.trim() : null);
+  const tableMenuHref = tableSlug ? `/menu?table=${encodeURIComponent(tableSlug)}` : "/menu";
+  const subtotalDisplay = splitCurrency(order?.subtotalLabel);
+  const taxDisplay = splitCurrency(order?.taxLabel);
+  const totalDisplay = splitCurrency(order?.totalLabel);
+
   if (!orderId || !order) {
     return (
       <AppShell
@@ -26,7 +52,7 @@ export default function OrderStatusPage() {
         hideSearch
         hideCartFab
         hideLocation
-        backHref="/menu"
+        backHref={tableMenuHref}
         title="Status Pesanan"
       >
         <div className="min-h-[60vh] flex items-center justify-center p-6">
@@ -37,7 +63,7 @@ export default function OrderStatusPage() {
               Pastikan kamu mengakses tautan status dari halaman pembayaran setelah konfirmasi.
             </p>
             <Link
-              href="/menu"
+              href={tableMenuHref}
               className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
             >
               <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -56,7 +82,7 @@ export default function OrderStatusPage() {
       hideSearch
       hideCartFab
       hideLocation
-      backHref="/menu"
+      backHref={tableMenuHref}
       title="Status Pesanan"
     >
       <div className="max-w-3xl mx-auto p-6 pb-24 space-y-6">
@@ -137,17 +163,26 @@ export default function OrderStatusPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-500">
             <div className="space-y-1">
-              <div className="flex gap-4">
+              <div className="flex w-full items-baseline justify-between gap-6">
                 <span>Subtotal</span>
-                <span className="font-semibold text-gray-700">{order.subtotalLabel}</span>
+                <span className="inline-flex items-baseline gap-1 font-semibold text-gray-700 whitespace-nowrap">
+                  {subtotalDisplay.currency ? <span>{subtotalDisplay.currency}</span> : null}
+                  <span className="tabular-nums">{subtotalDisplay.amount}</span>
+                </span>
               </div>
-              <div className="flex gap-4">
+              <div className="flex w-full items-baseline justify-between gap-6">
                 <span>Pajak (10%)</span>
-                <span className="font-semibold text-gray-700">{order.taxLabel}</span>
+                <span className="inline-flex items-baseline gap-1 font-semibold text-gray-700 whitespace-nowrap">
+                  {taxDisplay.currency ? <span>{taxDisplay.currency}</span> : null}
+                  <span className="tabular-nums">{taxDisplay.amount}</span>
+                </span>
               </div>
-              <div className="flex gap-4 text-emerald-600 font-semibold text-base">
+              <div className="flex w-full items-baseline justify-between gap-6 text-emerald-600 font-semibold text-base">
                 <span>Total</span>
-                <span>{order.totalLabel}</span>
+                <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+                  {totalDisplay.currency ? <span>{totalDisplay.currency}</span> : null}
+                  <span className="tabular-nums">{totalDisplay.amount}</span>
+                </span>
               </div>
             </div>
             <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-xs text-gray-500">
@@ -173,7 +208,7 @@ export default function OrderStatusPage() {
           <p className="text-sm font-semibold text-gray-700">Ingin memesan lagi?</p>
           <div className="flex flex-wrap gap-3 text-sm">
             <Link
-              href={order.tableId ? `/menu?table=${order.tableId}` : "/menu"}
+              href={tableMenuHref}
               className="rounded-full bg-emerald-500 px-4 py-2 font-semibold text-white shadow hover:bg-emerald-600 transition"
             >
               Buka Menu

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { NavigationItem } from "@/lib/navigation";
 import { useNavigationWithIcons } from "@/hooks/useNavigationWithIcons";
@@ -13,7 +12,8 @@ import { CategoryPills } from "@/components/CategoryPills";
 import { CartFab } from "@/components/CartFab";
 import { ProductCard } from "@/components/ProductCard";
 import { OrderStatusBanner } from "@/components/OrderStatusBanner";
-import { useCart } from "@/lib/cartStore";
+import { useTableAccess } from "@/hooks/useTableAccess";
+import { TableAccessBlocker } from "@/components/TableAccessBlocker";
 
 type MenuSection = {
   slug: CategorySlug;
@@ -37,11 +37,7 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const activeSlugRef = useRef(activeSlug);
   const intersectionMapRef = useRef<Map<string, IntersectionObserverEntry>>(new Map());
-  const { setTableId, setTableActive, tableActive } = useCart();
-  const [currentTableSlug, setCurrentTableSlug] = useState<string | null>(null);
-  const [tableAvailabilityChecked, setTableAvailabilityChecked] = useState(false);
-
-  const TABLES_STORAGE_KEY = "spm-admin-tables";
+  const { tableAvailabilityChecked, currentTableSlug, tableActive } = useTableAccess();
 
   useEffect(() => {
     activeSlugRef.current = activeSlug;
@@ -54,44 +50,6 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
     const fallbackSlug = navItems[0]?.slug ?? "all";
     setActiveSlug(fallbackSlug);
   }, [navItems, activeSlug]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const params = new URLSearchParams(window.location.search);
-    const tableParam = params.get("table");
-    if (tableParam) {
-      setCurrentTableSlug(tableParam);
-      let nextActive = true;
-      let nextTableId: string | null = tableParam;
-      const stored = window.localStorage.getItem(TABLES_STORAGE_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as Array<{ slug: string; active?: boolean }>;
-          const match = parsed.find((entry) => entry.slug === tableParam);
-          if (match) {
-            nextActive = match.active !== false;
-            if (!nextActive) {
-              nextTableId = null;
-            }
-          } else {
-            nextActive = false;
-            nextTableId = null;
-          }
-        } catch (error) {
-          console.error("Failed to read table configuration", error);
-        }
-      }
-      setTableId(nextTableId);
-      setTableActive(nextActive);
-    } else {
-      setCurrentTableSlug(null);
-      setTableId(null);
-      setTableActive(true);
-    }
-    setTableAvailabilityChecked(true);
-  }, [setTableId, setTableActive]);
 
   useEffect(() => {
     const cleanup = setupMotionEffects();
@@ -305,42 +263,7 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
         <OrderStatusBanner />
 
         {tableAvailabilityChecked && (!currentTableSlug || !tableActive) ? (
-          <div className="p-6 pb-24 flex items-center justify-center min-h-[60vh]">
-            <div className="max-w-md rounded-3xl bg-white/85 backdrop-blur border border-emerald-50/80 p-8 text-center space-y-4 shadow-lg">
-              <span className="material-symbols-outlined text-emerald-500 text-4xl">qr_code_2</span>
-              <p className="text-lg font-semibold text-gray-700">
-                {currentTableSlug ? "QR Tidak Dapat Digunakan" : "Scan QR Diperlukan"}
-              </p>
-              <p className="text-sm text-gray-500">
-                {currentTableSlug
-                  ? (
-                    <>
-                      Maaf, QR untuk meja <span className="font-semibold text-gray-700">{currentTableSlug}</span> sementara tidak aktif.
-                      Silakan hubungi kasir atau pindah ke meja lain.
-                    </>
-                  )
-                  : (
-                    <>Mohon scan QR yang tersedia di meja untuk memulai pemesanan.</>
-                  )}
-              </p>
-              <div className="flex justify-center gap-2">
-                <Link
-                  href="/"
-                  className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-100 transition"
-                >
-                  Kembali ke Beranda
-                </Link>
-                {currentTableSlug ? (
-                  <Link
-                    href="/menu"
-                    className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
-                  >
-                    Coba Lagi
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-          </div>
+          <TableAccessBlocker tableSlug={currentTableSlug} retryHref="/menu" />
         ) : (
           <>
             <div

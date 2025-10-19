@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { useOrders, type OrderEntry } from "@/lib/orderStore";
-import { SampleDataButton } from "./SampleDataButton";
 
 type OrderStatus = "all" | "pending" | "preparing" | "ready" | "served" | "cancelled";
 
@@ -18,6 +17,14 @@ export function OrderList() {
   const { orders, updateOrderStatus, clearOrders } = useOrders();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+  const requestClearOrders = () => setIsConfirmOpen(true);
+  const cancelClearOrders = () => setIsConfirmOpen(false);
+  const confirmClearOrders = () => {
+    clearOrders();
+    setIsConfirmOpen(false);
+  };
 
   const filteredOrders = useMemo(() => {
     let filtered = orders;
@@ -64,32 +71,11 @@ export function OrderList() {
   }, [orders]);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
     }).format(amount);
-  };
-
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('id-ID', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getTimeSince = (dateString: string) => {
-    const now = new Date();
-    const orderTime = new Date(dateString);
-    const diffMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60));
-    
-    if (diffMinutes < 1) return "Baru saja";
-    if (diffMinutes < 60) return `${diffMinutes} menit lalu`;
-    if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} jam lalu`;
-    return `${Math.floor(diffMinutes / 1440)} hari lalu`;
   };
 
   return (
@@ -110,9 +96,8 @@ export function OrderList() {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            <SampleDataButton />
             <button
-              onClick={clearOrders}
+              onClick={requestClearOrders}
               className="group flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-200 transition-colors"
             >
               <span className="material-symbols-outlined text-lg">delete_sweep</span>
@@ -135,9 +120,8 @@ export function OrderList() {
             </div>
           </div>
           <div className="flex gap-3">
-            <SampleDataButton />
             <button
-              onClick={clearOrders}
+              onClick={requestClearOrders}
               className="group flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-200 hover:border-red-300 transition-all duration-200 hover:scale-105"
             >
               <span className="material-symbols-outlined text-lg group-hover:rotate-12 transition-transform">
@@ -299,11 +283,7 @@ export function OrderList() {
                   Tampilkan Semua
                 </button>
               </div>
-            ) : (
-              <div className="flex justify-center">
-                <SampleDataButton />
-              </div>
-            )}
+            ) : null}
           </div>
         ) : (
           filteredOrders.map((order) => (
@@ -311,6 +291,48 @@ export function OrderList() {
           ))
         )}
       </div>
+      {isConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div
+            className="absolute inset-0"
+            aria-hidden="true"
+            onClick={cancelClearOrders}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-red-100"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl">warning</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Hapus Riwayat Pesanan?</h2>
+                <p className="text-sm text-gray-500">
+                  Tindakan ini akan menghapus seluruh riwayat pesanan dari dashboard.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelClearOrders}
+                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmClearOrders}
+                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl shadow-md hover:shadow-lg transition-all"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

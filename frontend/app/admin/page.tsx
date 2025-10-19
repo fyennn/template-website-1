@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ const NAV_ITEMS: Array<{ key: AdminNavKey; label: string; icon: string }> = [
   { key: "orders", label: "Pesanan", icon: "receipt_long" },
   { key: "settings", label: "Pengaturan", icon: "settings" },
 ];
+
 
 type TableEntry = {
   id: number;
@@ -2403,10 +2405,13 @@ export default function AdminPage() {
                   <div className="overflow-hidden rounded-3xl border border-emerald-100 bg-emerald-50/60 shadow-inner">
                     <div className="relative h-48 bg-gradient-to-br from-emerald-200 via-emerald-100 to-white">
                       {productImagePreview ? (
-                        <img
+                        <Image
                           src={productImagePreview}
                           alt={productForm.name || "Preview produk"}
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 400px"
                           className="h-full w-full object-cover"
+                          priority
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-sm text-emerald-700">
@@ -2698,21 +2703,30 @@ export default function AdminPage() {
                   </div>
                 </Link>
 
-                <div className="rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 via-white to-gray-100/60 p-6 shadow-sm">
+                <Link
+                  href="/admin/sales-report"
+                  className="group rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 via-white to-gray-100/60 p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center">
+                      <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center group-hover:bg-emerald-500 transition-colors">
                         <span className="material-symbols-outlined text-white text-lg">analytics</span>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">Laporan Penjualan</h3>
-                        <p className="text-sm text-gray-600">Coming soon</p>
+                        <h3 className="font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+                          Laporan Penjualan
+                        </h3>
+                        <p className="text-sm text-gray-600">Lihat laporan detail & insight.</p>
                       </div>
                     </div>
+                    <span className="material-symbols-outlined text-gray-400 transition group-hover:text-emerald-500 group-hover:translate-x-1">
+                      trending_up
+                    </span>
                   </div>
-                  <p className="text-sm text-gray-500">Fitur laporan detail akan segera tersedia</p>
-                </div>
+                  <p className="text-sm text-gray-500">Klik untuk membuka halaman laporan.</p>
+                </Link>
               </div>
+
             </section>
           ) : null}
 
@@ -2916,10 +2930,13 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="rounded-2xl bg-white border border-emerald-100/80 p-3 shadow grid place-items-center">
-                      <img
+                      <Image
                         src={table.qrDataUrl}
                         alt={`QR untuk ${table.name}`}
+                        width={144}
+                        height={144}
                         className="h-36 w-36 object-contain"
+                        sizes="144px"
                       />
                     </div>
                   </div>

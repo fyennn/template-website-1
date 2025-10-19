@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useCart } from "@/lib/cartStore";
 
 export type HeaderProps = {
   hideSearch?: boolean;
@@ -16,6 +17,15 @@ export function Header({
   backHref,
 }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { tableId } = useCart();
+  const searchHref = tableId
+    ? `/search?table=${encodeURIComponent(tableId)}`
+    : "/search";
+  const menuHref = tableId
+    ? `/menu?table=${encodeURIComponent(tableId)}`
+    : "/menu";
+  const isSearchPage = pathname === "/search";
 
   return (
     <header
@@ -92,14 +102,26 @@ export function Header({
           </div>
         </div>
       ) : (
-        <Link
-          href="/search"
-          className="text-gray-600 enter-animated enter-from-right enter-duration-short"
-          data-animate-delay="160"
-          aria-label="Cari menu"
-        >
-          <span className="material-symbols-outlined">search</span>
-        </Link>
+        isSearchPage ? (
+          <button
+            type="button"
+            onClick={() => router.push(menuHref)}
+            className="text-gray-600 enter-animated enter-from-right enter-duration-short"
+            data-animate-delay="160"
+            aria-label="Tutup pencarian"
+          >
+            <span className="material-symbols-outlined">search</span>
+          </button>
+        ) : (
+          <Link
+            href={searchHref}
+            className="text-gray-600 enter-animated enter-from-right enter-duration-short"
+            data-animate-delay="160"
+            aria-label="Cari menu"
+          >
+            <span className="material-symbols-outlined">search</span>
+          </Link>
+        )
       )}
     </header>
   );
