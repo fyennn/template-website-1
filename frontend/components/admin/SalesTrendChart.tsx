@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 export type SalesTrendPoint = {
   label: string;
@@ -14,27 +14,50 @@ export type SalesTrendChartProps = {
   target?: number | null;
 };
 
+type ChartMetrics = {
+  width: number;
+  height: number;
+  points: Array<{ x: number; y: number }>;
+  padding: { top: number; right: number; bottom: number; left: number };
+  lowerBound: number;
+  range: number;
+};
+
 export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps) {
-  const targetPatternId = useMemo(() => `target-stripe-${Math.random().toString(36).slice(2, 8)}`, []);
+  const baseId = useId().replace(/:/g, "-");
+  const targetPatternId = `target-stripe-${baseId}`;
+  const areaGradientId = `trend-area-${baseId}`;
 
   const metrics = useMemo(() => {
     if (data.length === 0) {
       return null;
     }
 
-    const chartHeight = 220;
-    const chartWidth = Math.max(520, data.length * 120);
-    const padding = 36;
+    const chartHeight = 260;
+    const chartWidth = Math.max(640, data.length * 140);
+    const padding = { top: 36, right: 56, bottom: 56, left: 56 };
     const maxDataValue = data.reduce((acc, item) => Math.max(acc, item.value), 0);
+    const minDataValue = data.reduce((acc, item) => Math.min(acc, item.value), Number.POSITIVE_INFINITY);
     const targetValue = typeof target === "number" && target > 0 ? target : null;
-    const maxValue = targetValue ? Math.max(maxDataValue, targetValue) : maxDataValue;
-    const safeMax = maxValue <= 0 ? 1 : maxValue;
-    const step = (chartWidth - padding * 2) / Math.max(data.length - 1, 1);
+    const combinedMax = targetValue !== null ? Math.max(maxDataValue, targetValue) : maxDataValue;
+    const combinedMin = targetValue !== null ? Math.min(minDataValue, targetValue) : minDataValue;
+    const rawRange = combinedMax - combinedMin;
+    const softRange = rawRange === 0 ? Math.max(combinedMax * 0.2, 1) : rawRange;
+    const margin = softRange * 0.2;
+    const lowerBound = combinedMin - margin;
+    const upperBound = combinedMax + margin;
+    const range = Math.max(upperBound - lowerBound, 1);
+    const horizontalPadding = padding.left + padding.right;
+    const verticalPadding = padding.top + padding.bottom;
+    const step = (chartWidth - horizontalPadding) / Math.max(data.length - 1, 1);
 
     const points = data.map((item, index) => {
-      const x = padding + index * step;
-      const ratio = item.value <= 0 ? 0 : item.value / safeMax;
-      const y = padding + (1 - ratio) * (chartHeight - padding * 2);
+      const x = padding.left + index * step;
+      const ratio = (item.value - lowerBound) / range;
+      const clampedRatio = Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
+      const y =
+        padding.top +
+        (1 - clampedRatio) * (chartHeight - verticalPadding);
       return { x, y };
     });
 
@@ -42,9 +65,10 @@ export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps)
       points,
       width: chartWidth,
       height: chartHeight,
-      safeMax,
       padding,
-    };
+      lowerBound,
+      range,
+    } as ChartMetrics;
   }, [data, target]);
 
   if (!metrics) {
@@ -55,16 +79,39 @@ export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps)
     );
   }
 
-  const { points, width, height, safeMax, padding } = metrics;
+  const { points, width, height, padding, lowerBound, range } = metrics;
 
   const path = points
     .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
     .join(" ");
 
-  const targetLineY = target && target > 0
-    ? padding + (1 - target / safeMax) * (height - padding * 2)
-    : null;
-  const targetRectHeight = targetLineY !== null ? Math.max(height - padding - targetLineY, 0) : null;
+  const baselineY = height - padding.bottom;
+  const areaPath =
+    points.length > 0
+      ? [
+          `M ${points[0].x.toFixed(2)} ${baselineY.toFixed(2)}`,
+          ...points.map((point) => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`),
+          `L ${points[points.length - 1].x.toFixed(2)} ${baselineY.toFixed(2)}`,
+          "Z",
+        ].join(" ")
+      : "";
+
+  const safeRange = range > 0 ? range : 1;
+  const targetRatio =
+    target && target > 0 ? (target - lowerBound) / safeRange : null;
+  const targetLineY =
+    targetRatio !== null && Number.isFinite(targetRatio)
+      ? padding.top + (1 - Math.max(0, Math.min(1, targetRatio))) * (height - (padding.top + padding.bottom))
+      : null;
+  const targetRectHeight =
+    targetLineY !== null ? Math.max(baselineY - targetLineY, 0) : null;
+
+  const gridLineCount = 4;
+  const gridLines = Array.from({ length: gridLineCount }, (_, index) => ({
+    y:
+      padding.top +
+      ((height - (padding.top + padding.bottom)) / (gridLineCount - 1)) * index,
+  }));
 
   return (
     <div className="space-y-4">
@@ -78,6 +125,13 @@ export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps)
             aria-label="Grafik tren pendapatan"
             className="block min-w-max"
           >
+            <defs>
+              <linearGradient id={areaGradientId} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="rgba(16, 185, 129, 0.28)" />
+                <stop offset="100%" stopColor="rgba(16, 185, 129, 0.04)" />
+              </linearGradient>
+            </defs>
+
             {targetLineY !== null ? (
               <defs>
                 <pattern id={targetPatternId} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -87,36 +141,50 @@ export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps)
               </defs>
             ) : null}
 
+            <g>
+              {gridLines.map((line, index) => (
+                <line
+                  key={`grid-${line.y.toFixed(2)}-${index}`}
+                  x1={padding.left}
+                  x2={width - padding.right}
+                  y1={line.y}
+                  y2={line.y}
+                  stroke="rgba(226, 232, 240, 0.6)"
+                  strokeWidth={1}
+                  strokeDasharray={index === 0 || index === gridLineCount - 1 ? "4 2" : "2 4"}
+                />
+              ))}
+            </g>
+
             {targetLineY !== null ? (
               <g>
                 {targetRectHeight && targetRectHeight > 0 ? (
                   <rect
-                    x={padding}
+                    x={padding.left}
                     y={targetLineY}
-                    width={width - padding * 2}
+                    width={width - (padding.left + padding.right)}
                     height={targetRectHeight}
                     fill={`url(#${targetPatternId})`}
                   />
                 ) : null}
                 <line
-                  x1={padding}
-                  x2={width - padding}
+                  x1={padding.left}
+                  x2={width - padding.right}
                   y1={targetLineY}
                   y2={targetLineY}
                   stroke="rgba(16, 185, 129, 0.45)"
                   strokeWidth={2}
                   strokeDasharray="6 6"
                 />
-                <text
-                  x={width - padding}
-                  y={Math.max(targetLineY - 8, 16)}
-                  textAnchor="end"
-                  className="text-[11px] font-semibold"
-                  fill="rgba(16, 107, 78, 0.9)"
-                >
-                  Target: {target?.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}
-                </text>
               </g>
+            ) : null}
+
+            {areaPath ? (
+              <path
+                d={areaPath}
+                fill={`url(#${areaGradientId})`}
+                opacity={0.9}
+              />
             ) : null}
 
             <path
@@ -134,13 +202,35 @@ export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps)
               const pointStroke = meetsTarget === null ? "rgba(16, 185, 129, 0.9)" : meetsTarget ? "rgba(16, 185, 129, 0.9)" : "rgba(248, 113, 113, 0.7)";
               const pointFill = meetsTarget === null ? "rgba(16, 185, 129, 0.95)" : meetsTarget ? "rgba(16, 185, 129, 0.95)" : "rgba(248, 113, 113, 0.85)";
               const valueColor = meetsTarget === false ? "#B91C1C" : "#047857";
+              const difference = target && target > 0 ? datum.value - target : null;
+              const formattedDifference =
+                difference !== null
+                  ? `${difference >= 0 ? "+" : "-"}${Math.abs(difference).toLocaleString("id-ID", {
+                      style: "currency",
+                      currency: "IDR",
+                      maximumFractionDigits: 0,
+                    })}`
+                  : null;
+              const tooltipLines = [
+                datum.label,
+                `Pendapatan: ${datum.value.toLocaleString("id-ID", {
+                  style: "currency",
+                  currency: "IDR",
+                  maximumFractionDigits: 0,
+                })}`,
+                `Terjual: ${datum.quantity.toLocaleString("id-ID")} item`,
+              ];
+              if (formattedDifference) {
+                tooltipLines.push(`Selisih target: ${formattedDifference}`);
+              }
               return (
                 <g key={datum.label}>
+                  <title>{tooltipLines.join("\n")}</title>
                   <circle cx={point.x} cy={point.y} r={5.5} fill="#fff" stroke={pointStroke} strokeWidth={2} />
                   <circle cx={point.x} cy={point.y} r={3} fill={pointFill} />
                   <text
                     x={point.x}
-                    y={Math.max(point.y - 16, 16)}
+                    y={Math.max(point.y - 16, padding.top + 8)}
                     textAnchor="middle"
                     className="text-[11px] font-semibold"
                     fill={valueColor}
@@ -149,7 +239,7 @@ export function SalesTrendChart({ data, caption, target }: SalesTrendChartProps)
                   </text>
                   <text
                     x={point.x}
-                    y={Math.min(point.y + 32, height - 12)}
+                    y={Math.min(point.y + 32, height - padding.bottom + 18)}
                     textAnchor="middle"
                     className="text-[11px] text-gray-500"
                   >

@@ -1,17 +1,35 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/authStore";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const { login, isAdmin, isReady } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const redirectTarget = useMemo(() => {
+    const value = searchParams?.get("redirect");
+    if (value && value.startsWith("/")) {
+      return value;
+    }
+    return "/admin";
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+    if (isAdmin) {
+      router.replace(redirectTarget);
+    }
+  }, [isAdmin, isReady, redirectTarget, router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -20,11 +38,23 @@ export default function LoginPage() {
     const success = await login({ email, password });
     setIsSubmitting(false);
     if (success) {
-      router.push("/admin");
+      router.replace(redirectTarget);
     } else {
       setError("Email atau kata sandi tidak valid.");
     }
   };
+
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#f2faf6] via-white to-[#eef5ff] flex items-center justify-center px-4">
+        <div className="text-sm text-gray-500 font-medium">Memuat…</div>
+      </div>
+    );
+  }
+
+  if (isAdmin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f2faf6] via-white to-[#eef5ff] flex items-center justify-center px-4">

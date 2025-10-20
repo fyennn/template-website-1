@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useOrders } from "@/lib/orderStore";
+import { formatTableLabel, normalizeTableSlug, isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 function splitCurrency(label?: string | null) {
   if (!label) {
@@ -28,7 +29,12 @@ function splitCurrency(label?: string | null) {
 export default function OrderStatusPage() {
   const searchParams = useSearchParams();
   const orderId = searchParams?.get("orderId") ?? null;
-  const tableQuery = searchParams?.get("table") ?? null;
+  const tableQueryRaw =
+    searchParams?.get("cards") ??
+    searchParams?.get("card") ??
+    searchParams?.get("table") ??
+    null;
+  const tableQuery = tableQueryRaw ? tableQueryRaw.trim() : null;
   const { orders } = useOrders();
 
   const order = useMemo(() => {
@@ -38,8 +44,19 @@ export default function OrderStatusPage() {
     return orders.find((entry) => entry.id === orderId) ?? null;
   }, [orders, orderId]);
 
-  const tableSlug = order?.tableId ?? (tableQuery ? tableQuery.trim() : null);
-  const tableMenuHref = tableSlug ? `/menu?table=${encodeURIComponent(tableSlug)}` : "/menu";
+  const normalizedOrderSlug = normalizeTableSlug(order?.tableId);
+  const normalizedQuerySlug = normalizeTableSlug(tableQuery);
+  const effectiveTableSlug = normalizedOrderSlug ?? normalizedQuerySlug;
+  const isCashierOrder =
+    isCashierCardSlug(normalizedOrderSlug) ||
+    isCashierCardSlug(normalizedQuerySlug) ||
+    isTakeawaySlug(normalizedOrderSlug) ||
+    isTakeawaySlug(normalizedQuerySlug);
+  const baseMenuPath = isCashierOrder ? "/cashier/menu" : "/menu";
+  const tableMenuHref = effectiveTableSlug
+    ? `${baseMenuPath}?cards=${encodeURIComponent(effectiveTableSlug)}`
+    : baseMenuPath;
+  const tableLabel = formatTableLabel(normalizedOrderSlug ?? normalizedQuerySlug);
   const subtotalDisplay = splitCurrency(order?.subtotalLabel);
   const taxDisplay = splitCurrency(order?.taxLabel);
   const totalDisplay = splitCurrency(order?.totalLabel);
@@ -82,7 +99,7 @@ export default function OrderStatusPage() {
       hideSearch
       hideCartFab
       hideLocation
-      backHref={tableMenuHref}
+      backHref={isCashierOrder ? undefined : tableMenuHref}
       title="Status Pesanan"
     >
       <div className="max-w-3xl mx-auto p-6 pb-24 space-y-6">
@@ -100,7 +117,7 @@ export default function OrderStatusPage() {
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-500">Meja</p>
-              <p className="text-sm font-semibold text-emerald-600">{order.tableId ?? "Take Away"}</p>
+              <p className="text-sm font-semibold text-emerald-600">{tableLabel}</p>
               <span
                 className={`mt-2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
                   order.status === "served"
@@ -189,11 +206,11 @@ export default function OrderStatusPage() {
               <p className="font-semibold text-gray-700">Apa selanjutnya?</p>
               <p>
                 {order.status === "pending" 
-                  ? `Pesananmu sudah diterima dan akan segera diproses. Silakan tunggu di meja ${order.tableId ?? "area pickup"}.`
+                  ? `Pesananmu sudah diterima dan akan segera diproses. Silakan tunggu di ${tableLabel}.`
                   : order.status === "preparing"
-                  ? `Barista kami sedang menyiapkan pesananmu dengan penuh perhatian. Silakan tunggu di meja ${order.tableId ?? "area pickup"}.`
+                  ? `Barista kami sedang menyiapkan pesananmu dengan penuh perhatian. Silakan tunggu di ${tableLabel}.`
                   : order.status === "ready"
-                  ? `Pesananmu sudah siap! Silakan ambil di counter atau tunggu staff kami mengantarkan ke meja ${order.tableId ?? "area pickup"}.`
+                  ? `Pesananmu sudah siap! Silakan ambil di counter atau tunggu staff kami mengantarkan ke ${tableLabel}.`
                   : order.status === "served"
                   ? "Pesananmu sudah diantar. Selamat menikmati! Jangan lupa berikan feedback untuk pelayanan kami."
                   : order.status === "cancelled"
@@ -204,23 +221,44 @@ export default function OrderStatusPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white/70 backdrop-blur border border-emerald-50/80 p-6 space-y-4">
-          <p className="text-sm font-semibold text-gray-700">Ingin memesan lagi?</p>
-          <div className="flex flex-wrap gap-3 text-sm">
+        {isCashierOrder ? (
+          <section className="rounded-3xl bg-white/70 backdrop-blur border border-emerald-50/80 p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Pesanan via Kasir</p>
+                <p className="text-xs text-gray-500">
+                  Cetak struk untuk pelanggan atau kembali ke panel kasir.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-600 shadow hover:bg-emerald-50 transition"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                Cetak Struk
+              </button>
+            </div>
+            <Link
+              href="/cashier"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
+            >
+              <span className="material-symbols-outlined text-sm">point_of_sale</span>
+              Kembali ke Kasir
+            </Link>
+          </section>
+        ) : (
+          <section className="rounded-3xl bg-white/70 backdrop-blur border border-emerald-50/80 p-6 space-y-4">
+            <p className="text-sm font-semibold text-gray-700">Ingin memesan lagi?</p>
             <Link
               href={tableMenuHref}
-              className="rounded-full bg-emerald-500 px-4 py-2 font-semibold text-white shadow hover:bg-emerald-600 transition"
+              className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
             >
+              <span className="material-symbols-outlined text-sm">restaurant_menu</span>
               Buka Menu
             </Link>
-            <Link
-              href="/"
-              className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 font-semibold text-emerald-600 hover:bg-emerald-100 transition"
-            >
-              Kembali ke Beranda
-            </Link>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </AppShell>
   );

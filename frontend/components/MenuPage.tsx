@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { NavigationItem } from "@/lib/navigation";
 import { useNavigationWithIcons } from "@/hooks/useNavigationWithIcons";
@@ -14,6 +15,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { OrderStatusBanner } from "@/components/OrderStatusBanner";
 import { useTableAccess } from "@/hooks/useTableAccess";
 import { TableAccessBlocker } from "@/components/TableAccessBlocker";
+import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 type MenuSection = {
   slug: CategorySlug;
@@ -30,6 +32,7 @@ const gridClassName =
   "p-4 pb-24 space-y-12 md:space-y-16";
 
 export function MenuPageContent({ navigation, sections }: MenuPageProps) {
+  const pathname = usePathname();
   const initialActiveSlug = navigation[0]?.slug ?? "all";
   const navItems = useNavigationWithIcons(navigation);
   const [activeSlug, setActiveSlug] = useState<CategorySlug>(initialActiveSlug);
@@ -38,6 +41,10 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
   const activeSlugRef = useRef(activeSlug);
   const intersectionMapRef = useRef<Map<string, IntersectionObserverEntry>>(new Map());
   const { tableAvailabilityChecked, currentTableSlug, tableActive } = useTableAccess();
+  const isCashierContext =
+    pathname?.startsWith("/cashier") ||
+    isCashierCardSlug(currentTableSlug) ||
+    isTakeawaySlug(currentTableSlug);
 
   useEffect(() => {
     activeSlugRef.current = activeSlug;
@@ -263,7 +270,10 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
         <OrderStatusBanner />
 
         {tableAvailabilityChecked && (!currentTableSlug || !tableActive) ? (
-          <TableAccessBlocker tableSlug={currentTableSlug} retryHref="/menu" />
+        <TableAccessBlocker
+          tableSlug={currentTableSlug}
+          retryHref={isCashierContext ? "/cashier/menu" : "/menu"}
+        />
         ) : (
           <>
             <div

@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { formatCurrency } from "@/lib/products";
 import type { CategorySlug, Product } from "@/lib/products";
 import type { CartOptionSelection } from "@/lib/cart";
 import { useCart } from "@/lib/cartStore";
+import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 const beverageCategories: CategorySlug[] = [
   "pistachio-series",
@@ -269,6 +270,11 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
   );
   const { addItem, replaceItem, insertItemAfter, tableId } = useCart();
   const router = useRouter();
+  const pathname = usePathname();
+  const isCashierContext =
+    pathname?.startsWith("/cashier") ||
+    isCashierCardSlug(tableId) ||
+    isTakeawaySlug(tableId);
 
   const totalAddons = useMemo(() => {
     let total = 0;
@@ -298,17 +304,26 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
 
   const totalPrice = (product.price + totalAddons) * quantity;
   const defaultRedirectTarget = useMemo(() => {
+    const baseMenuPath = isCashierContext ? "/cashier/menu" : "/menu";
     if (!tableId) {
-      return "/menu";
+      return baseMenuPath;
     }
-    return `/menu?table=${encodeURIComponent(tableId)}`;
-  }, [tableId]);
+    return `${baseMenuPath}?cards=${encodeURIComponent(tableId)}`;
+  }, [isCashierContext, tableId]);
   const redirectTarget =
     searchParams?.get("redirect") ?? defaultRedirectTarget;
+  const cartDestination = useMemo(() => {
+    const baseCartPath = isCashierContext ? "/cashier/cart" : "/cart";
+    if (!tableId) {
+      return baseCartPath;
+    }
+    return `${baseCartPath}?cards=${encodeURIComponent(tableId)}`;
+  }, [isCashierContext, tableId]);
   const updateIndexParam = searchParams?.get("updateIndex");
   const updateIndex = updateIndexParam ? Number.parseInt(updateIndexParam, 10) : NaN;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (destination?: string) => {
+    const target = destination ?? redirectTarget;
     const options = optionGroups.flatMap((group) => {
       if (group.type === "single") {
         const selectedId = selection.singles[group.id];
@@ -362,39 +377,44 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
           } else {
             replaceItem(updateIndex, cartItem);
           }
-          router.push(redirectTarget);
+          router.push(target);
           return;
         }
       }
       replaceItem(updateIndex, cartItem);
-      router.push(redirectTarget);
+      router.push(target);
       return;
     }
     addItem(cartItem);
 
-    router.push(redirectTarget);
+    router.push(target);
   };
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-[#f9fafb] via-[#f3f6f9] to-[#f0f4f8] text-gray-800 pb-24">
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
-        <header className="flex items-center gap-4 text-sm text-gray-500">
+        <header className="flex items-center gap-4 rounded-3xl bg-white/70 px-4 py-3 text-sm text-gray-500 shadow-sm backdrop-blur">
           <button
             type="button"
             onClick={() => router.push(redirectTarget)}
             className="detail-header-back shrink-0"
             aria-label="Kembali ke menu"
           >
-            <span className="material-symbols-outlined text-base">chevron_left</span>
-            <span>Menu</span>
+            <span className="material-symbols-outlined text-lg">chevron_left</span>
+            <span className="hidden sm:inline">Menu</span>
+            <span className="sm:hidden">Menu</span>
           </button>
-          <div className="flex-1 text-center">
-            <p className="uppercase tracking-[0.3em] text-xs font-semibold">Detail Produk</p>
-            <h1 className="text-xl font-semibold text-gray-700 mt-1">
+          <div className="flex flex-1 flex-col items-center text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-400">
+              Detail Produk
+            </p>
+            <h1 className="mt-1 text-xl font-semibold text-gray-700 sm:text-2xl">
               {product.name}
             </h1>
           </div>
-          <span className="material-symbols-outlined text-gray-400 shrink-0">coffee</span>
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-500 shadow-inner">
+            <span className="material-symbols-outlined text-xl">coffee</span>
+          </div>
         </header>
 
         <section className="mt-6 overflow-hidden rounded-3xl shadow-lg bg-white/60 backdrop-blur">
@@ -528,23 +548,32 @@ export function ProductDetail({ product, category }: ProductDetailProps) {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 bg-white/80 backdrop-blur-lg border-t border-white/60">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-gray-400">
+      <div className="fixed inset-x-0 bottom-0 border-t border-white/60 bg-white/85 backdrop-blur-lg">
+        <div className="mx-auto flex max-w-3xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-4">
+          <div className="text-center sm:text-left">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-gray-400">
               Total
             </p>
-            <p className="text-xl font-semibold text-gray-800">
+            <p className="text-lg font-semibold text-gray-800 sm:text-xl">
               {formatCurrency(totalPrice)}
             </p>
           </div>
-          <button
-            type="button"
-            className="detail-add-button"
-            onClick={handleAddToCart}
-          >
-            Tambah ke Keranjang
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <button
+              type="button"
+              className="detail-secondary-button w-full sm:w-auto"
+              onClick={() => handleAddToCart(cartDestination)}
+            >
+              Pesan Sekarang
+            </button>
+            <button
+              type="button"
+              className="detail-add-button w-full sm:w-auto"
+              onClick={() => handleAddToCart()}
+            >
+              Tambah ke Keranjang
+            </button>
+          </div>
         </div>
       </div>
     </div>

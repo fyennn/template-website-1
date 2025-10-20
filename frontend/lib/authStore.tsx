@@ -13,6 +13,7 @@ import {
 
 type AuthState = {
   isAdmin: boolean;
+  isReady: boolean;
   login: (payload: { email: string; password: string }) => Promise<boolean>;
   logout: () => void;
 };
@@ -22,12 +23,13 @@ const ADMIN_CREDENTIALS = {
   email: "admin@spmcafe.id",
   password: "spm-admin",
 };
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const logoutTimerRef = useRef<number | null>(null);
 
   const clearScheduledLogout = useCallback(() => {
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     clearScheduledLogout();
     setIsAdmin(false);
+    setIsReady(true);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -66,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) {
+        setIsReady(true);
         return;
       }
       const parsed = JSON.parse(raw) as { value: boolean; expiresAt: number } | null;
@@ -74,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (remaining > 0) {
           setIsAdmin(true);
           scheduleLogout(remaining);
+          setIsReady(true);
           return;
         }
       }
@@ -82,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Failed to restore admin session", error);
       window.localStorage.removeItem(STORAGE_KEY);
     }
+    setIsReady(true);
   }, [scheduleLogout]);
 
   useEffect(() => () => clearScheduledLogout(), [clearScheduledLogout]);
@@ -92,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password === ADMIN_CREDENTIALS.password;
     if (match) {
       setIsAdmin(true);
+      setIsReady(true);
       const payload = {
         value: true,
         expiresAt: Date.now() + SESSION_DURATION_MS,
@@ -103,7 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   }, [scheduleLogout]);
 
-  const value = useMemo(() => ({ isAdmin, login, logout }), [isAdmin, login, logout]);
+  const value = useMemo(
+    () => ({ isAdmin, isReady, login, logout }),
+    [isAdmin, isReady, login, logout]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

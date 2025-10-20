@@ -8,16 +8,18 @@ import QRCode from "qrcode";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { useAuth } from "@/lib/authStore";
 import { useOrders } from "@/lib/orderStore";
+import { formatTableLabel } from "@/lib/tables";
 import { PRODUCT_CATALOG } from "@/lib/products";
 import type { ChangeEvent, FormEvent } from "react";
 
-type AdminNavKey = "dashboard" | "products" | "tables" | "orders" | "settings";
+type AdminNavKey = "dashboard" | "cashier" | "products" | "tables" | "kitchen" | "settings";
 
 const NAV_ITEMS: Array<{ key: AdminNavKey; label: string; icon: string }> = [
   { key: "dashboard", label: "Ringkasan", icon: "space_dashboard" },
+  { key: "cashier", label: "Kasir", icon: "point_of_sale" },
   { key: "products", label: "Produk", icon: "coffee" },
   { key: "tables", label: "Meja", icon: "table_restaurant" },
-  { key: "orders", label: "Pesanan", icon: "receipt_long" },
+  { key: "kitchen", label: "Kitchen", icon: "receipt_long" },
   { key: "settings", label: "Pengaturan", icon: "settings" },
 ];
 
@@ -51,6 +53,16 @@ type AdminAccount = {
   lastLogin: string;
 };
 
+type PaymentAudienceOptions = {
+  qrisEnabled: boolean;
+  cashEnabled: boolean;
+  cardEnabled: boolean;
+};
+
+type CashierPaymentOptions = PaymentAudienceOptions & {
+  autoConfirmQris: boolean;
+};
+
 type AdminSettings = {
   store: {
     name: string;
@@ -75,9 +87,8 @@ type AdminSettings = {
     bankName: string;
     bankAccountName: string;
     bankAccountNumber: string;
-    cashEnabled: boolean;
-    cardEnabled: boolean;
-    autoConfirmQris: boolean;
+    user: PaymentAudienceOptions;
+    cashier: CashierPaymentOptions;
     serviceCharge: number;
     taxRate: number;
   };
@@ -430,9 +441,17 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
     bankName: "BCA",
     bankAccountName: "SPM Café",
     bankAccountNumber: "1234567890",
-    cashEnabled: true,
-    cardEnabled: true,
-    autoConfirmQris: true,
+    user: {
+      qrisEnabled: true,
+      cashEnabled: false,
+      cardEnabled: false,
+    },
+    cashier: {
+      qrisEnabled: true,
+      cashEnabled: true,
+      cardEnabled: true,
+      autoConfirmQris: true,
+    },
     serviceCharge: 5,
     taxRate: 10,
   },
@@ -467,11 +486,56 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   ],
 };
 
+function normalizePaymentSettings(
+  stored?: Partial<AdminSettings["payment"]> | null
+): AdminSettings["payment"] {
+  const base = DEFAULT_ADMIN_SETTINGS.payment;
+  const legacy = stored ?? undefined;
+  const {
+    cashEnabled: legacyCashEnabled,
+    cardEnabled: legacyCardEnabled,
+    autoConfirmQris: legacyAutoConfirmQris,
+    qrisEnabled: legacyQrisEnabled,
+    user: storedUser,
+    cashier: storedCashier,
+    ...rest
+  } = legacy ?? {};
+  const normalized: AdminSettings["payment"] = {
+    ...base,
+    ...rest,
+    user: {
+      ...base.user,
+      ...(storedUser ?? {}),
+    },
+    cashier: {
+      ...base.cashier,
+      ...(storedCashier ?? {}),
+    },
+  };
+
+  // Backward compatibility for legacy flat flags
+  if (typeof legacyCashEnabled === "boolean") {
+    normalized.cashier.cashEnabled = legacyCashEnabled;
+  }
+  if (typeof legacyCardEnabled === "boolean") {
+    normalized.cashier.cardEnabled = legacyCardEnabled;
+  }
+  if (typeof legacyAutoConfirmQris === "boolean") {
+    normalized.cashier.autoConfirmQris = legacyAutoConfirmQris;
+  }
+  if (typeof legacyQrisEnabled === "boolean") {
+    normalized.cashier.qrisEnabled = legacyQrisEnabled;
+    normalized.user.qrisEnabled = legacyQrisEnabled;
+  }
+
+  return normalized;
+}
+
 function createDefaultSettings(): AdminSettings {
   return {
     store: { ...DEFAULT_ADMIN_SETTINGS.store },
     hours: DEFAULT_ADMIN_SETTINGS.hours.map((entry) => ({ ...entry })),
-    payment: { ...DEFAULT_ADMIN_SETTINGS.payment },
+    payment: normalizePaymentSettings(null),
     notifications: { ...DEFAULT_ADMIN_SETTINGS.notifications },
     adminAccounts: DEFAULT_ADMIN_SETTINGS.adminAccounts.map((entry) => ({ ...entry })),
   };
@@ -505,7 +569,7 @@ function mergeStoredSettings(stored: Partial<AdminSettings> | null | undefined):
   return {
     store: { ...DEFAULT_ADMIN_SETTINGS.store, ...(stored.store ?? {}) },
     hours: mergedHours,
-    payment: { ...DEFAULT_ADMIN_SETTINGS.payment, ...(stored.payment ?? {}) },
+    payment: normalizePaymentSettings(stored.payment),
     notifications: { ...DEFAULT_ADMIN_SETTINGS.notifications, ...(stored.notifications ?? {}) },
     adminAccounts: mergedAccounts,
   };
@@ -553,17 +617,7 @@ type SettingsSectionKey =
   | "hours"
   | "payment"
   | "notifications"
-  | "access"
-  | "backup";
-
-type BackupRangeValue = "7d" | "30d" | "90d" | "custom";
-
-const BACKUP_RANGE_OPTIONS: Array<{ value: BackupRangeValue; label: string }> = [
-  { value: "7d", label: "7 Hari Terakhir" },
-  { value: "30d", label: "30 Hari Terakhir" },
-  { value: "90d", label: "90 Hari Terakhir" },
-  { value: "custom", label: "Rentang Kustom" },
-];
+  | "access";
 
 const SETTINGS_SECTIONS: Array<{
   key: SettingsSectionKey;
@@ -607,12 +661,6 @@ const SETTINGS_SECTIONS: Array<{
     description: "Kelola tim admin",
     icon: "group",
   },
-  {
-    key: "backup",
-    label: "Backup & Ekspor",
-    description: "Unduh laporan penjualan",
-    icon: "cloud_download",
-  },
 ];
 
 // Daftar bank umum di Indonesia untuk dropdown
@@ -637,50 +685,6 @@ const BANK_OPTIONS: string[] = [
   "Neo Commerce",
   "Allo Bank",
 ];
-
-function backupRangeLabel(value: BackupRangeValue): string {
-  const option = BACKUP_RANGE_OPTIONS.find((opt) => opt.value === value);
-  return option ? option.label : "7 Hari Terakhir";
-}
-
-function computePreviewSummary(
-  range: BackupRangeValue,
-  customStart: string,
-  customEnd: string
-): { totalOrders: number; totalRevenue: number; periodLabel: string } {
-  // This is demo data - in production, this would fetch from backend
-  const dummyData: Record<BackupRangeValue, { orders: number; revenue: number }> = {
-    "7d": { orders: 156, revenue: 12450000 },
-    "30d": { orders: 687, revenue: 54320000 },
-    "90d": { orders: 2134, revenue: 167890000 },
-    custom: { orders: 0, revenue: 0 },
-  };
-
-  const data = dummyData[range] || dummyData["7d"];
-  
-  let periodLabel = backupRangeLabel(range);
-  if (range === "custom" && customStart && customEnd) {
-    periodLabel = `${customStart} hingga ${customEnd}`;
-    // For custom range, estimate based on date difference
-    const start = new Date(customStart);
-    const end = new Date(customEnd);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    const avgPerDay = dummyData["7d"].orders / 7;
-    data.orders = Math.round(avgPerDay * days);
-    data.revenue = Math.round((dummyData["7d"].revenue / 7) * days);
-  }
-
-  return {
-    totalOrders: data.orders,
-    totalRevenue: data.revenue,
-    periodLabel,
-  };
-}
-
-function formatNumberID(num: number): string {
-  return new Intl.NumberFormat("id-ID").format(num);
-}
-
 function formatCurrencyIDR(amount: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -708,7 +712,7 @@ function formatTableName(index: number): string {
 
 async function generateTableEntry(index: number, origin: string, active = true): Promise<TableEntry> {
   const slug = formatTableCode(index);
-  const url = `${origin}/menu?table=${slug}`;
+  const url = `${origin}/menu?cards=${slug}`;
   const qrDataUrl = await QRCode.toDataURL(url, {
     width: 300,
     margin: 2,
@@ -762,7 +766,7 @@ function OrderListSection({
                   Pesanan #{order.id.slice(0, 8)}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {order.tableId || "Tanpa meja"} · {new Date(order.createdAt).toLocaleString('id-ID', { 
+                  {formatTableLabel(order.tableId)} · {new Date(order.createdAt).toLocaleString('id-ID', { 
                     day: '2-digit', 
                     month: '2-digit', 
                     hour: '2-digit', 
@@ -802,7 +806,7 @@ function OrderListSection({
 
 export default function AdminPage() {
   const router = useRouter();
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, isReady, logout } = useAuth();
   const { orders, markServed, clearOrders } = useOrders();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [activeKey, setActiveKey] = useState<AdminNavKey>("dashboard");
@@ -828,23 +832,6 @@ export default function AdminPage() {
   const [adminInviteError, setAdminInviteError] = useState<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionKey>("store");
-  const [backupRange, setBackupRange] = useState<BackupRangeValue>("7d");
-  const [isExportingBackup, setIsExportingBackup] = useState(false);
-  const [customRangeStart, setCustomRangeStart] = useState<string>("");
-  const [customRangeEnd, setCustomRangeEnd] = useState<string>("");
-  const [selectedExportFormats, setSelectedExportFormats] = useState<{
-    csv: boolean;
-    pdf: boolean;
-  }>({ csv: true, pdf: true });
-  const [previewSummary, setPreviewSummary] = useState<{
-    totalOrders: number;
-    totalRevenue: number;
-    periodLabel: string;
-  }>({
-    totalOrders: 0,
-    totalRevenue: 0,
-    periodLabel: backupRangeLabel("7d"),
-  });
   const settingsHydratedRef = useRef(false);
   const [showLowStockConfig, setShowLowStockConfig] = useState(false);
   const [showStaffScheduleConfig, setShowStaffScheduleConfig] = useState(false);
@@ -914,45 +901,53 @@ export default function AdminPage() {
     let resolvedProducts: AdminProductRecord[] = SAMPLE_PRODUCTS;
 
     try {
-      const storedCategories = window.localStorage.getItem(CATEGORIES_STORAGE_KEY);
-      if (storedCategories) {
-        const parsed = JSON.parse(storedCategories);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((entry) => {
-            if (typeof entry === "string") {
-              ensureCategory(entry);
-            } else if (entry && typeof entry === "object") {
-              const slug = typeof entry.slug === "string" ? entry.slug : "";
-              const icon = typeof entry.icon === "string" ? entry.icon : undefined;
-              ensureCategory(slug, icon);
-            }
-          });
-        } else if (parsed && typeof parsed === "object") {
-          const storedEntries = Array.isArray(parsed.categories)
-            ? parsed.categories
-            : [];
-          const iconOverrides =
-            parsed.icons && typeof parsed.icons === "object" ? parsed.icons : {};
+      const storedCategoriesRaw = window.localStorage.getItem(CATEGORIES_STORAGE_KEY);
+      if (storedCategoriesRaw) {
+        try {
+          const parsed = JSON.parse(storedCategoriesRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((entry) => {
+              if (typeof entry === "string") {
+                ensureCategory(entry);
+              } else if (entry && typeof entry === "object") {
+                const candidate = entry as { slug?: unknown; icon?: unknown };
+                const slug = typeof candidate.slug === "string" ? candidate.slug : "";
+                const icon = typeof candidate.icon === "string" ? candidate.icon : undefined;
+                ensureCategory(slug, icon);
+              }
+            });
+          } else if (parsed && typeof parsed === "object") {
+            const storedEntries: unknown[] = Array.isArray(parsed.categories)
+              ? parsed.categories
+              : [];
+            const iconOverrides =
+              parsed.icons && typeof parsed.icons === "object"
+                ? (parsed.icons as Record<string, unknown>)
+                : {};
 
-          storedEntries.forEach((entry) => {
-            if (typeof entry === "string") {
-              const override =
-                typeof iconOverrides[entry] === "string" ? iconOverrides[entry] : undefined;
-              ensureCategory(entry, override);
-            } else if (entry && typeof entry === "object") {
-              const slug = typeof entry.slug === "string" ? entry.slug : "";
-              const legacyIcon = typeof entry.icon === "string" ? entry.icon : undefined;
-              const override =
-                typeof iconOverrides[slug] === "string" ? iconOverrides[slug] : legacyIcon;
-              ensureCategory(slug, override);
-            }
-          });
+            storedEntries.forEach((entry) => {
+              if (typeof entry === "string") {
+                const override =
+                  typeof iconOverrides[entry] === "string" ? iconOverrides[entry] : undefined;
+                ensureCategory(entry, override);
+              } else if (entry && typeof entry === "object") {
+                const candidate = entry as { slug?: unknown; icon?: unknown };
+                const slug = typeof candidate.slug === "string" ? candidate.slug : "";
+                const legacyIcon = typeof candidate.icon === "string" ? candidate.icon : undefined;
+                const override =
+                  typeof iconOverrides[slug] === "string" ? iconOverrides[slug] : legacyIcon;
+                ensureCategory(slug, override);
+              }
+            });
 
-          Object.entries(iconOverrides).forEach(([slug, icon]) => {
-            if (typeof slug === "string" && typeof icon === "string") {
-              ensureCategory(slug, icon);
-            }
-          });
+            Object.entries(iconOverrides).forEach(([slug, icon]) => {
+              if (typeof slug === "string" && typeof icon === "string") {
+                ensureCategory(slug, icon);
+              }
+            });
+          }
+        } catch (error) {
+          console.warn("Gagal parsing kategori dari localStorage", error);
         }
       }
 
@@ -1468,72 +1463,32 @@ export default function AdminPage() {
     setIsDirty(true);
   };
 
-  const togglePaymentField = (field: "cashEnabled" | "cardEnabled" | "autoConfirmQris") => {
+  const toggleCashierPaymentField = (field: keyof CashierPaymentOptions) => {
     setSettings((prev) => ({
       ...prev,
       payment: {
         ...prev.payment,
-        [field]: !prev.payment[field],
+        cashier: {
+          ...prev.payment.cashier,
+          [field]: !prev.payment.cashier[field],
+        },
       },
     }));
     setIsDirty(true);
   };
 
-  const handleBackupRangeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value as BackupRangeValue;
-    setBackupRange(value);
-    if (value !== "custom") {
-      setCustomRangeStart("");
-      setCustomRangeEnd("");
-      setPreviewSummary((prev) => ({
-        ...prev,
-        periodLabel: backupRangeLabel(value),
-      }));
-    }
-  };
-
-  const handleCustomRangeChange = (field: "start" | "end", value: string) => {
-    if (field === "start") {
-      setCustomRangeStart(value);
-    } else {
-      setCustomRangeEnd(value);
-    }
-  };
-
-  const toggleExportFormat = (field: "csv" | "pdf") => {
-    setSelectedExportFormats((prev) => {
-      const next = { ...prev, [field]: !prev[field] };
-      if (!next.csv && !next.pdf) {
-        next[field === "csv" ? "pdf" : "csv"] = true;
-      }
-      return next;
-    });
-  };
-
-  const handleExportSalesBackup = () => {
-    if (isExportingBackup) {
-      return;
-    }
-    setPreviewSummary(computePreviewSummary(backupRange, customRangeStart, customRangeEnd));
-    setIsExportingBackup(true);
-    const formats = [
-      selectedExportFormats.csv ? "CSV" : null,
-      selectedExportFormats.pdf ? "PDF" : null,
-    ]
-      .filter(Boolean)
-      .join(" & ");
-    const periodText =
-      backupRange === "custom" && customRangeStart && customRangeEnd
-        ? `${customRangeStart} hingga ${customRangeEnd}`
-        : backupRangeLabel(backupRange);
-    setSaveMessage(`Menyiapkan laporan ${formats} untuk periode ${periodText}…`);
-    window.setTimeout(() => {
-      setIsExportingBackup(false);
-      setSaveMessage(
-        `Laporan ${formats} untuk periode ${periodText} siap diunduh · mode demo.`
-      );
-      window.setTimeout(() => setSaveMessage(null), 2600);
-    }, 900);
+  const toggleUserPaymentField = (field: keyof PaymentAudienceOptions) => {
+    setSettings((prev) => ({
+      ...prev,
+      payment: {
+        ...prev.payment,
+        user: {
+          ...prev.payment.user,
+          [field]: !prev.payment.user[field],
+        },
+      },
+    }));
+    setIsDirty(true);
   };
 
   const handleNotificationContactChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1687,10 +1642,13 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
     if (!isAdmin) {
       router.replace("/login");
     }
-  }, [isAdmin, router]);
+  }, [isAdmin, isReady, router]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -1762,11 +1720,6 @@ export default function AdminPage() {
       setPendingSave(false);
     }
   }, [pendingSave, settings, adminAccounts, categoryOptions, categoryIcons]);
-
-  useEffect(() => {
-    setPreviewSummary(computePreviewSummary(backupRange, customRangeStart, customRangeEnd));
-  }, [backupRange, customRangeStart, customRangeEnd]);
-
   useEffect(() => {
     if (!isAdmin) {
       return;
@@ -1894,11 +1847,6 @@ export default function AdminPage() {
       return next;
     });
   };
-
-  const isCustomRangeIncomplete =
-    backupRange === "custom" && (!customRangeStart || !customRangeEnd);
-  const downloadDisabled = isExportingBackup || isCustomRangeIncomplete;
-
   const handleSaveAll = () => {
     if (!isDirty) return;
     setPendingSave(true);
@@ -2025,6 +1973,29 @@ export default function AdminPage() {
                         placeholder="Contoh: Signature roasted pistachio cream"
                         className="rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                       />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm text-gray-600">
+                      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                        Harga Produk
+                      </span>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">
+                          Rp
+                        </span>
+                        <input
+                          name="price"
+                          value={productForm.price}
+                          onChange={handleProductInputChange}
+                          inputMode="numeric"
+                          pattern="\d*"
+                          placeholder="Contoh: 55000"
+                          className="rounded-xl border border-emerald-100 bg-white px-4 py-3 pl-11 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                          required
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Ditampilkan sebagai <span className="font-semibold text-emerald-600">{formattedPricePreview}</span>
+                      </p>
                     </label>
                   </div>
 
@@ -2555,6 +2526,10 @@ export default function AdminPage() {
     );
   };
 
+  if (!isReady) {
+    return null;
+  }
+
   if (!isAdmin) {
     return null;
   }
@@ -2606,13 +2581,26 @@ export default function AdminPage() {
           {NAV_ITEMS.map((item) => {
             const isActive = item.key === activeKey;
             
-            // Special handling for orders - navigate to separate page
-            if (item.key === "orders") {
+            // Special handling for kitchen view - navigate to separate page
+            if (item.key === "kitchen") {
               return (
                 <Link
                   key={item.key}
-                  href="/admin/orders"
+                  href="/orders"
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition text-gray-500 hover:bg-emerald-50`}
+                >
+                  <span className="material-symbols-outlined text-base">{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            }
+
+            if (item.key === "cashier") {
+              return (
+                <Link
+                  key={item.key}
+                  href="/cashier"
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition text-gray-500 hover:bg-emerald-50"
                 >
                   <span className="material-symbols-outlined text-base">{item.icon}</span>
                   {item.label}
@@ -2670,7 +2658,7 @@ export default function AdminPage() {
               {/* Quick Actions */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Link
-                  href="/admin/orders"
+                  href="/orders"
                   className="group rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/60 p-6 shadow-sm hover:shadow-md transition-all duration-200"
                 >
                   <div className="flex items-center justify-between mb-4">
@@ -2950,7 +2938,7 @@ export default function AdminPage() {
             </section>
           ) : null}
 
-          {activeKey === "orders" ? (
+          {activeKey === "kitchen" ? (
             <section className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
@@ -3486,25 +3474,75 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {[
-                            { field: "cashEnabled" as const, label: "Terima Tunai" },
-                            { field: "cardEnabled" as const, label: "Terima Kartu/Debit" },
-                            { field: "autoConfirmQris" as const, label: "Otomatis Konfirmasi QRIS" },
-                          ].map((item) => (
-                            <label
-                              key={item.field}
-                              className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 text-sm text-gray-600"
-                            >
-                              {item.label}
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                                checked={settings.payment[item.field]}
-                                onChange={() => togglePaymentField(item.field)}
-                              />
-                            </label>
-                          ))}
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600">
+                                  Versi Pengguna
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Pilihan pembayaran yang tampil di aplikasi pelanggan.
+                                </p>
+                              </div>
+                              <span className="material-symbols-outlined text-emerald-500 text-xl">smartphone</span>
+                            </div>
+                            <div className="space-y-2">
+                              {[
+                                { field: "qrisEnabled" as const, label: "QRIS" },
+                                { field: "cashEnabled" as const, label: "Terima Tunai" },
+                                { field: "cardEnabled" as const, label: "Terima Kartu/Debit" },
+                              ].map((item) => (
+                                <label
+                                  key={`user-${item.field}`}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-white/80 px-4 py-3 text-sm text-gray-600"
+                                >
+                                  {item.label}
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                    checked={settings.payment.user[item.field]}
+                                    onChange={() => toggleUserPaymentField(item.field)}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600">
+                                  Versi Kasir
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Kontrol metode pembayaran yang tersedia di perangkat kasir.
+                                </p>
+                              </div>
+                              <span className="material-symbols-outlined text-emerald-500 text-xl">point_of_sale</span>
+                            </div>
+                            <div className="space-y-2">
+                              {[
+                                { field: "qrisEnabled" as const, label: "QRIS" },
+                                { field: "cashEnabled" as const, label: "Terima Tunai" },
+                                { field: "cardEnabled" as const, label: "Terima Kartu/Debit" },
+                                { field: "autoConfirmQris" as const, label: "Otomatis Konfirmasi QRIS" },
+                              ].map((item) => (
+                                <label
+                                  key={`cashier-${item.field}`}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-white/80 px-4 py-3 text-sm text-gray-600"
+                                >
+                                  {item.label}
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                    checked={settings.payment.cashier[item.field]}
+                                    onChange={() => toggleCashierPaymentField(item.field)}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
                         </div>
 
                         <div className="grid gap-4 sm:grid-cols-2">
@@ -3971,169 +4009,6 @@ export default function AdminPage() {
                             </p>
                           )}
                         </form>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {activeSettingsSection === "backup" ? (
-                    <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6 space-y-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pusat Backup</p>
-                          <h3 className="text-lg font-semibold text-gray-700">Ekspor Laporan Penjualan</h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            Pilih rentang waktu dan format laporan, lalu unduh file secara instan.
-                          </p>
-                        </div>
-                        <span className="material-symbols-outlined text-emerald-500 text-2xl">cloud_download</span>
-                      </div>
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <label htmlFor="backup-range" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                            Rentang Waktu
-                          </label>
-                          <select
-                            id="backup-range"
-                            value={backupRange}
-                            onChange={handleBackupRangeChange}
-                            className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                          >
-                            {BACKUP_RANGE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                          {isCustomRangeIncomplete ? (
-                            <p className="text-xs text-amber-500">
-                              Lengkapi tanggal mulai dan akhir sebelum mengunduh.
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Format File</p>
-                          <div className="flex flex-wrap gap-3">
-                            {[
-                              {
-                                key: "csv" as const,
-                                label: "CSV",
-                                caption: "Spreadsheet (.csv) untuk analisis detail",
-                              },
-                              {
-                                key: "pdf" as const,
-                                label: "PDF",
-                                caption: "Ringkasan siap cetak (.pdf)",
-                              },
-                            ].map((option) => {
-                              const checked = selectedExportFormats[option.key];
-                              return (
-                                <label key={option.key} className="cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    className="sr-only"
-                                    checked={checked}
-                                    onChange={() => toggleExportFormat(option.key)}
-                                  />
-                                  <div
-                                    className={`rounded-xl border px-4 py-3 shadow-sm transition ${
-                                      checked
-                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-100"
-                                        : "border-emerald-100 bg-white text-gray-600 hover:border-emerald-200"
-                                    }`}
-                                  >
-                                    <p className="text-sm font-semibold">{option.label}</p>
-                                    <p className="text-xs text-gray-400">{option.caption}</p>
-                                  </div>
-                                </label>
-                              );
-                            })}
-                          </div>
-                          <p className="text-xs text-gray-400">Pilih minimal satu format laporan.</p>
-                        </div>
-                      </div>
-
-                      {backupRange === "custom" ? (
-                        <div className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <label htmlFor="backup-custom-start" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Dari Tanggal
-                            </label>
-                            <input
-                              id="backup-custom-start"
-                              type="date"
-                              value={customRangeStart}
-                              max={customRangeEnd || undefined}
-                              onChange={(event) => handleCustomRangeChange("start", event.target.value)}
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label htmlFor="backup-custom-end" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Hingga Tanggal
-                            </label>
-                            <input
-                              id="backup-custom-end"
-                              type="date"
-                              value={customRangeEnd}
-                              min={customRangeStart || undefined}
-                              onChange={(event) => handleCustomRangeChange("end", event.target.value)}
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            />
-                          </div>
-                          <p className="sm:col-span-2 text-xs text-gray-400">
-                            Untuk performa terbaik, gunakan rentang maksimal 90 hari.
-                          </p>
-                        </div>
-                      ) : null}
-
-                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-                        <p className="text-xs uppercase tracking-[0.3em] text-gray-400">Pratinjau</p>
-                        <h4 className="text-sm font-semibold text-gray-700 mt-1">Ringkasan Periode</h4>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Periode: <span className="font-semibold text-gray-700">{previewSummary.periodLabel}</span>
-                        </p>
-                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                          <div className="rounded-xl border border-emerald-100 bg-white/70 p-4">
-                            <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Total Transaksi</p>
-                            <p className="mt-2 text-lg font-semibold text-gray-700">
-                              {formatNumberID(previewSummary.totalOrders)}
-                            </p>
-                          </div>
-                          <div className="rounded-xl border border-emerald-100 bg-white/70 p-4">
-                            <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Total Penjualan</p>
-                            <p className="mt-2 text-lg font-semibold text-emerald-600">
-                              {formatCurrencyIDR(previewSummary.totalRevenue)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="text-xs text-gray-500">
-                          {isExportingBackup
-                            ? "Menyiapkan laporan, mohon tunggu sebentar…"
-                            : "Tekan tombol unduh untuk menghasilkan laporan."}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleExportSalesBackup}
-                          disabled={downloadDisabled}
-                          className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition disabled:cursor-not-allowed disabled:opacity-70"
-                        >
-                          {isExportingBackup ? (
-                            <>
-                              <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
-                              Menyiapkan…
-                            </>
-                          ) : (
-                            <>
-                              <span className="material-symbols-outlined text-base">download</span>
-                              Unduh Laporan
-                            </>
-                          )}
-                        </button>
                       </div>
                     </div>
                   ) : null}

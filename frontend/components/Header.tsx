@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCart } from "@/lib/cartStore";
+import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 export type HeaderProps = {
   hideSearch?: boolean;
@@ -19,13 +20,19 @@ export function Header({
   const router = useRouter();
   const pathname = usePathname();
   const { tableId } = useCart();
-  const searchHref = tableId
-    ? `/search?table=${encodeURIComponent(tableId)}`
-    : "/search";
+  const isCashierContext =
+    pathname?.startsWith("/cashier") ||
+    isCashierCardSlug(tableId) ||
+    isTakeawaySlug(tableId);
+  const baseMenuPath = isCashierContext ? "/cashier/menu" : "/menu";
+  const baseSearchPath = isCashierContext ? "/cashier/search" : "/search";
   const menuHref = tableId
-    ? `/menu?table=${encodeURIComponent(tableId)}`
-    : "/menu";
-  const isSearchPage = pathname === "/search";
+    ? `${baseMenuPath}?cards=${encodeURIComponent(tableId)}`
+    : baseMenuPath;
+  const searchHref = tableId
+    ? `${baseSearchPath}?cards=${encodeURIComponent(tableId)}`
+    : baseSearchPath;
+  const isSearchPage = pathname === baseSearchPath;
 
   return (
     <header

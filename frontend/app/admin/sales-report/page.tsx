@@ -6,6 +6,12 @@ import { SalesPieChart } from "@/components/admin/SalesPieChart";
 import { SalesTrendChart, type SalesTrendPoint } from "@/components/admin/SalesTrendChart";
 import { useOrders } from "@/lib/orderStore";
 
+type PieDatum = {
+  label: string;
+  value: number;
+  quantity: number;
+};
+
 const FALLBACK_TREND_SAMPLES: Record<"daily" | "weekly" | "monthly", SalesTrendPoint[]> = {
   daily: [
     { label: "Sen, 8 Apr", value: 2150000, quantity: 42 },
@@ -36,7 +42,7 @@ const FALLBACK_TREND_SAMPLES: Record<"daily" | "weekly" | "monthly", SalesTrendP
   ],
 };
 
-const FALLBACK_SALES_PIE_DATA = [
+const FALLBACK_PIE_BASE = [
   { label: "Pistachio Series", value: 7450000, quantity: 162 },
   { label: "Matcha Club", value: 5180000, quantity: 124 },
   { label: "Signature Coffee", value: 4680000, quantity: 110 },
@@ -45,7 +51,20 @@ const FALLBACK_SALES_PIE_DATA = [
   { label: "Cold Brew Lab", value: 1850000, quantity: 48 },
   { label: "Beans Subscription", value: 1250000, quantity: 27 },
   { label: "Merchandise", value: 950000, quantity: 34 },
-];
+] as const;
+
+const scalePieData = (factor: number) =>
+  FALLBACK_PIE_BASE.map((item) => ({
+    label: item.label,
+    value: Math.max(0, Math.round((item.value * factor) / 1000) * 1000),
+    quantity: Math.max(0, Math.round(item.quantity * factor)),
+  }));
+
+const FALLBACK_PIE_SAMPLES = {
+  daily: scalePieData(1 / 7),
+  weekly: scalePieData(1),
+  monthly: scalePieData(4),
+} satisfies Record<"daily" | "weekly" | "monthly", PieDatum[]>;
 
 const SALES_RANGE_OPTIONS = [
   { key: "daily", label: "Harian" },
@@ -55,12 +74,6 @@ const SALES_RANGE_OPTIONS = [
 ] as const;
 
 type SalesRangeKey = (typeof SALES_RANGE_OPTIONS)[number]["key"];
-
-type PieDatum = {
-  label: string;
-  value: number;
-  quantity: number;
-};
 
 type SalesInsights = {
   pieChart: PieDatum[];
@@ -169,6 +182,7 @@ function useSalesInsights(range: SalesRangeKey, customStart: string, customEnd: 
     let trendLabel = "7 hari terakhir";
 
     let customError: string | null = null;
+    let customRangeLength: number | null = null;
 
     switch (range) {
       case "daily": {
@@ -238,6 +252,7 @@ function useSalesInsights(range: SalesRangeKey, customStart: string, customEnd: 
         trendStart = insightStart;
         trendCount = Math.max(1, diffDays);
         trendLabel = `${dayMonthFormatter.format(insightStart)} - ${dayMonthFormatter.format(insightEnd)}`;
+        customRangeLength = trendCount;
         break;
       }
       default:
@@ -283,9 +298,28 @@ function useSalesInsights(range: SalesRangeKey, customStart: string, customEnd: 
       .sort((a, b) => b.value - a.value);
 
     const pieHasData = pieList.some((item) => item.value > 0 || item.quantity > 0);
-    const pieResult = pieHasData
-      ? pieList
-      : FALLBACK_SALES_PIE_DATA.map((item) => ({ ...item }));
+    const fallbackPie = (() => {
+      if (pieHasData) {
+        return pieList;
+      }
+      if (range === "weekly") {
+        return FALLBACK_PIE_SAMPLES.weekly.map((item) => ({ ...item }));
+      }
+      if (range === "monthly") {
+        return FALLBACK_PIE_SAMPLES.monthly.map((item) => ({ ...item }));
+      }
+      if (range === "custom") {
+        const dayCount = Math.max(1, customRangeLength ?? differenceInDays(insightStart, insightEnd) + 1);
+        return FALLBACK_PIE_SAMPLES.daily.map((item) => ({
+          ...item,
+          value: Math.max(0, Math.round((item.value * dayCount) / 1000) * 1000),
+          quantity: Math.max(0, Math.round(item.quantity * dayCount)),
+        }));
+      }
+      return FALLBACK_PIE_SAMPLES.daily.map((item) => ({ ...item }));
+    })();
+
+    const pieResult = pieHasData ? pieList : fallbackPie;
 
     const trendBuckets = new Map<number, { value: number; quantity: number }>();
     const trendRangeEndForEntries = (() => {
@@ -521,11 +555,7 @@ export default function SalesReportPage() {
               ) : null}
             </div>
 
-            <SalesPieChart
-              chartData={displayedCategories}
-              listData={displayedCategories}
-              title={`Periode: ${salesInsights.pieLabel}${showAllCategories ? " • Semua kategori" : " • Top 5"}`}
-            />
+            <SalesPieChart chartData={displayedCategories} listData={displayedCategories} />
 
             <div className="rounded-2xl border border-emerald-50 bg-emerald-50/60 px-4 py-3 text-xs text-emerald-700">
               <p className="font-semibold text-emerald-800">Tips Analisis</p>
@@ -606,7 +636,7 @@ export default function SalesReportPage() {
         <section className="rounded-3xl border border-emerald-100/80 bg-white/85 p-6 shadow-sm space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-700">Ekspor & Bagikan</h2>
+              <h2 className="text-lg font-semibold text-gray-700">Export Penjualan</h2>
               <p className="text-sm text-gray-500">Siapkan laporan penjualan versi PDF atau spreadsheet.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -622,7 +652,7 @@ export default function SalesReportPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            Ekspor otomatis akan menggunakan rentang waktu yang sedang aktif. Fitur integrasi backend akan menambahkan ringkasan metrik dan data transaksi detail.
+            Ekspor otomatis akan menggunakan rentang waktu yang sedang aktif.
           </p>
         </section>
       </main>

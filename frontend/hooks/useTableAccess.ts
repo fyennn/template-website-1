@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCart } from "@/lib/cartStore";
+import { isTakeawaySlug, normalizeTableSlug } from "@/lib/tables";
 
 const TABLES_STORAGE_KEY = "spm-admin-tables";
 
@@ -23,32 +24,39 @@ export function useTableAccess(): TableAccessState {
       return;
     }
 
-    const tableParam = searchParams?.get("table");
-    const slug = tableParam && tableParam.trim().length > 0 ? tableParam : null;
+    const tableParam =
+      searchParams?.get("cards") ??
+      searchParams?.get("card") ??
+      searchParams?.get("table");
+    const normalizedSlug = normalizeTableSlug(tableParam);
 
-    if (slug) {
-      setCurrentTableSlug(slug);
+    if (normalizedSlug) {
+      setCurrentTableSlug(normalizedSlug);
 
       let nextActive = true;
-      let usableTableId: string | null = slug;
+      let usableTableId: string | null = normalizedSlug;
+      const isCashierCard = normalizedSlug.startsWith("A-");
+      const isTakeaway = isTakeawaySlug(normalizedSlug);
 
-      try {
-        const raw = window.localStorage.getItem(TABLES_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Array<{ slug: string; active?: boolean }>;
-          const match = parsed.find((entry) => entry.slug === slug);
-          if (match) {
-            nextActive = match.active !== false;
-            if (!nextActive) {
+      if (!isCashierCard && !isTakeaway) {
+        try {
+          const raw = window.localStorage.getItem(TABLES_STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw) as Array<{ slug: string; active?: boolean }>;
+            const match = parsed.find((entry) => entry.slug === normalizedSlug);
+            if (match) {
+              nextActive = match.active !== false;
+              if (!nextActive) {
+                usableTableId = null;
+              }
+            } else {
+              nextActive = false;
               usableTableId = null;
             }
-          } else {
-            nextActive = false;
-            usableTableId = null;
           }
+        } catch (error) {
+          console.error("Failed to read table configuration", error);
         }
-      } catch (error) {
-        console.error("Failed to read table configuration", error);
       }
 
       if (usableTableId !== tableId) {

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useOrders, type OrderEntry } from "@/lib/orderStore";
+import { formatTableLabel } from "@/lib/tables";
 
 type OrderStatus = "all" | "pending" | "preparing" | "ready" | "served" | "cancelled";
 
@@ -14,17 +15,9 @@ const statusConfig = {
 };
 
 export function OrderList() {
-  const { orders, updateOrderStatus, clearOrders } = useOrders();
+  const { orders, updateOrderStatus } = useOrders();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-
-  const requestClearOrders = () => setIsConfirmOpen(true);
-  const cancelClearOrders = () => setIsConfirmOpen(false);
-  const confirmClearOrders = () => {
-    clearOrders();
-    setIsConfirmOpen(false);
-  };
 
   const filteredOrders = useMemo(() => {
     let filtered = orders;
@@ -40,6 +33,7 @@ export function OrderList() {
       filtered = filtered.filter(order => 
         order.id.toLowerCase().includes(term) ||
         order.tableId?.toLowerCase().includes(term) ||
+        formatTableLabel(order.tableId).toLowerCase().includes(term) ||
         order.customerInfo?.name?.toLowerCase().includes(term) ||
         order.customerInfo?.phone?.includes(term) ||
         order.items.some(item => item.name.toLowerCase().includes(term))
@@ -70,14 +64,6 @@ export function OrderList() {
     return stats;
   }, [orders]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
   return (
     <div className="space-y-8">
       {/* Responsive Header & Stats */}
@@ -95,15 +81,7 @@ export function OrderList() {
               <p className="text-sm text-gray-600 truncate">Monitoring real-time</p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <button
-              onClick={requestClearOrders}
-              className="group flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-200 transition-colors"
-            >
-              <span className="material-symbols-outlined text-lg">delete_sweep</span>
-              Hapus Riwayat
-            </button>
-          </div>
+          <div className="flex flex-col sm:flex-row gap-2" />
         </div>
 
         {/* Desktop Header */}
@@ -119,21 +97,11 @@ export function OrderList() {
               <p className="text-gray-600 mt-1">Monitoring real-time untuk semua aktivitas pesanan</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={requestClearOrders}
-              className="group flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-200 hover:border-red-300 transition-all duration-200 hover:scale-105"
-            >
-              <span className="material-symbols-outlined text-lg group-hover:rotate-12 transition-transform">
-                delete_sweep
-              </span>
-              Hapus Riwayat
-            </button>
-          </div>
+          <div className="flex gap-3" />
         </div>
 
         {/* Responsive Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
           <div className="group bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 hover:border-gray-300 transition-all duration-300 hover:scale-105 hover:shadow-lg">
             <div className="flex items-center justify-between mb-2 lg:mb-3">
               <span className="material-symbols-outlined text-gray-500 text-lg sm:text-xl lg:text-2xl group-hover:scale-110 transition-transform">
@@ -189,16 +157,6 @@ export function OrderList() {
             <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-emerald-800">{orderStats.served}</p>
           </div>
 
-          <div className="group bg-gradient-to-br from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-xl lg:rounded-2xl p-3 sm:p-4 lg:p-6 border border-purple-200 hover:border-purple-300 transition-all duration-300 hover:scale-105 hover:shadow-lg">
-            <div className="flex items-center justify-between mb-2 lg:mb-3">
-              <span className="material-symbols-outlined text-purple-600 text-lg sm:text-xl lg:text-2xl group-hover:scale-110 transition-transform">
-                payments
-              </span>
-              <div className="w-2 h-2 lg:w-3 lg:h-3 bg-purple-400 rounded-full animate-pulse"></div>
-            </div>
-            <p className="text-xs sm:text-sm font-medium text-purple-700 mb-1">Pendapatan</p>
-            <p className="text-lg sm:text-xl lg:text-2xl font-bold text-purple-800">{formatCurrency(orderStats.totalRevenue)}</p>
-          </div>
         </div>
 
         {/* Responsive Search & Filter */}
@@ -291,48 +249,6 @@ export function OrderList() {
           ))
         )}
       </div>
-      {isConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div
-            className="absolute inset-0"
-            aria-hidden="true"
-            onClick={cancelClearOrders}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-red-100"
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
-                <span className="material-symbols-outlined text-2xl">warning</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Hapus Riwayat Pesanan?</h2>
-                <p className="text-sm text-gray-500">
-                  Tindakan ini akan menghapus seluruh riwayat pesanan dari dashboard.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <button
-                type="button"
-                onClick={cancelClearOrders}
-                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={confirmClearOrders}
-                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl shadow-md hover:shadow-lg transition-all"
-              >
-                Ya, Hapus
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -345,15 +261,8 @@ function OrderCard({
   onStatusUpdate: (id: string, status: OrderEntry["status"]) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const statusInfo = statusConfig[order.status];
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
 
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleString('id-ID', {
@@ -377,7 +286,8 @@ function OrderCard({
   };
 
   return (
-    <div className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 hover:border-emerald-200 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.02]">
+    <>
+      <div className="group bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 hover:border-emerald-200 overflow-hidden transition-all duration-300 hover:shadow-2xl hover:scale-[1.02]">
       {/* Modern Header dengan gradient dan glassmorphism */}
       <div className="relative bg-gradient-to-br from-emerald-50 via-white to-blue-50 border-b border-emerald-100/50 p-6">
         {/* Background Pattern */}
@@ -409,7 +319,7 @@ function OrderCard({
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm">table_restaurant</span>
-                  <span>Meja {order.tableId || "Take Away"}</span>
+                  <span>Meja {formatTableLabel(order.tableId)}</span>
                 </div>
               </div>
             </div>
@@ -423,12 +333,6 @@ function OrderCard({
                 {statusInfo.label}
               </span>
             </div>
-            <p className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
-              {order.totalLabel}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {order.items.reduce((sum, item) => sum + item.quantity, 0)} item • {order.items.length} produk
-            </p>
           </div>
         </div>
 
@@ -441,7 +345,6 @@ function OrderCard({
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-900">{item.name}</p>
-                <p className="text-xs font-medium text-emerald-600">{item.linePriceLabel}</p>
               </div>
             </div>
           ))}
@@ -569,7 +472,7 @@ function OrderCard({
               
               {(order.status === "pending" || order.status === "preparing") && (
                 <button
-                  onClick={() => onStatusUpdate(order.id, "cancelled")}
+                  onClick={() => setIsCancelConfirmOpen(true)}
                   className="group flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 transform"
                 >
                   <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">
@@ -618,10 +521,6 @@ function OrderCard({
                           <span className="material-symbols-outlined text-emerald-600 text-sm">counter_1</span>
                           <span className="text-gray-600">Qty: <strong className="text-gray-900">{item.quantity}</strong></span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-emerald-600 text-sm">payments</span>
-                          <span className="text-gray-600">@ <strong className="text-gray-900">{item.unitPriceLabel || formatCurrency(item.unitPrice || 0)}</strong></span>
-                        </div>
                       </div>
                       
                       {item.options.length > 0 && (
@@ -641,12 +540,7 @@ function OrderCard({
                       )}
                     </div>
                     
-                    <div className="text-right ml-6">
-                      <p className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
-                        {item.linePriceLabel}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">Total Item</p>
-                    </div>
+                    <div className="text-right ml-6" />
                   </div>
                 </div>
               ))}
@@ -654,36 +548,52 @@ function OrderCard({
 
             {/* Total Summary dengan design yang eye-catching */}
             <div className="mt-6 p-5 bg-gradient-to-br from-emerald-50 via-white to-blue-50 rounded-2xl border border-emerald-200 shadow-lg">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">calculate</span>
-                    Subtotal
-                  </span>
-                  <span className="font-semibold text-gray-900">{order.subtotalLabel}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">percent</span>
-                    Pajak (10%)
-                  </span>
-                  <span className="font-semibold text-gray-900">{order.taxLabel}</span>
-                </div>
-                <div className="h-px bg-gradient-to-r from-emerald-200 to-blue-200"></div>
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <span className="material-symbols-outlined">payments</span>
-                    Total Pembayaran
-                  </span>
-                  <span className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
-                    {order.totalLabel}
-                  </span>
-                </div>
+              <div className="text-sm text-gray-600">
+                Pesanan ini berisi {order.items.length} produk dengan total {order.items.reduce((sum, item) => sum + item.quantity, 0)} item.
               </div>
             </div>
           </div>
         )}
       </div>
-    </div>
+      </div>
+      {isCancelConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+          onClick={() => setIsCancelConfirmOpen(false)}
+        >
+          <div
+            className="bg-white/95 border border-gray-200 shadow-2xl rounded-2xl max-w-sm w-full p-6 space-y-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-center w-14 h-14 mx-auto rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg">
+              <span className="material-symbols-outlined text-2xl">report_problem</span>
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-semibold text-gray-900">Batalkan pesanan?</h3>
+              <p className="text-sm text-gray-600">
+                Tindakan ini tidak dapat dibatalkan. Pastikan pesanan ini memang harus dibatalkan.
+              </p>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-center gap-2">
+              <button
+                onClick={() => setIsCancelConfirmOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              >
+                Kembali
+              </button>
+              <button
+                onClick={() => {
+                  onStatusUpdate(order.id, "cancelled");
+                  setIsCancelConfirmOpen(false);
+                }}
+                className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl shadow-lg transition-all"
+              >
+                Ya, Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

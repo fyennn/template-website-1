@@ -1,13 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useCart } from "@/lib/cartStore";
 import { useOrders } from "@/lib/orderStore";
+import { formatTableLabel, normalizeTableSlug } from "@/lib/tables";
 
 export function OrderStatusBanner() {
     const { orders } = useOrders();
+    const { tableId } = useCart();
+    const searchParams = useSearchParams();
+    const rawTableParam =
+        searchParams?.get("cards") ??
+        searchParams?.get("card") ??
+        searchParams?.get("table") ??
+        "";
+    const normalizedQuerySlug = normalizeTableSlug(rawTableParam);
+    const normalizedCartSlug = normalizeTableSlug(tableId);
+    const normalizedEffectiveSlug = normalizedQuerySlug ?? normalizedCartSlug;
+
+    const ordersForCurrentTable = orders.filter(order => {
+        const orderSlug = normalizeTableSlug(order.tableId);
+        if (!normalizedEffectiveSlug) {
+            return !orderSlug;
+        }
+        return orderSlug === normalizedEffectiveSlug;
+    });
 
     // Ambil semua pesanan yang masih aktif (belum served/cancelled), urutkan berdasarkan waktu terbaru
-    const activeOrders = orders
+    const activeOrders = ordersForCurrentTable
         .filter(order => !["served", "cancelled"].includes(order.status))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -61,7 +82,7 @@ export function OrderStatusBanner() {
                                 {hasMultipleOrders ? `${activeOrders.length} Pesanan Aktif` : currentStatus.text}
                             </p>
                             <p className="text-xs text-emerald-600">
-                                Order #{latestOrder.id.slice(-8)} • Meja {latestOrder.tableId || "Take Away"}
+                                Order #{latestOrder.id.slice(-8)} • {formatTableLabel(latestOrder.tableId)}
                             </p>
                             <p className="text-xs text-emerald-500 mt-1">
                                 {timeText} • {latestOrder.items.length} item • {latestOrder.totalLabel}
@@ -92,6 +113,8 @@ export function OrderStatusBanner() {
                                             {orderStatus.icon}
                                         </span>
                                         #{order.id.slice(-6)}
+                                        <span className="text-emerald-500">•</span>
+                                        {formatTableLabel(order.tableId)}
                                         <span className="text-emerald-500">•</span>
                                         {order.totalLabel}
                                     </Link>

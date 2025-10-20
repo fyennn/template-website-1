@@ -9,6 +9,7 @@ import { useCart } from "@/lib/cartStore";
 import { useOrders } from "@/lib/orderStore";
 import { categoryToPath } from "@/lib/navigation";
 import { formatCurrency } from "@/lib/products";
+import { formatTableLabel } from "@/lib/tables";
 
 const QR_PLACEHOLDER =
   "data:image/svg+xml;utf8," +
@@ -231,7 +232,7 @@ export default function QrisPaymentPage() {
               </div>
               <div className="flex justify-between">
                 <span>Meja</span>
-                <span>{tableId ?? "Take Away"}</span>
+                <span>{formatTableLabel(tableId)}</span>
               </div>
             </div>
           </div>

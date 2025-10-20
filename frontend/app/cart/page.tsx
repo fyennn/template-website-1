@@ -2,31 +2,197 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
 import { formatCurrency, ALL_PRODUCTS_WITH_CATEGORY } from "@/lib/products";
 import { categoryToPath } from "@/lib/navigation";
-import { useCart } from "@/lib/cartStore";
+import { useCart, type PaymentMethodKey } from "@/lib/cartStore";
+import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
+
+const ADMIN_SETTINGS_STORAGE_KEY = "spm-admin-settings";
+
+type PaymentVisibility = {
+  qrisEnabled: boolean;
+  cashEnabled: boolean;
+  cardEnabled: boolean;
+};
+
+type CashierPaymentConfig = PaymentVisibility & {
+  autoConfirmQris: boolean;
+};
+
+type PaymentState = {
+  cashier: CashierPaymentConfig;
+  user: PaymentVisibility;
+};
+
+type StoredAdminSettings = {
+  payment?: {
+    cashier?: Partial<CashierPaymentConfig>;
+    user?: Partial<PaymentVisibility>;
+    cashEnabled?: boolean;
+    cardEnabled?: boolean;
+    autoConfirmQris?: boolean;
+    qrisEnabled?: boolean;
+    [key: string]: unknown;
+  };
+};
+
+const DEFAULT_PAYMENT_STATE: PaymentState = {
+  cashier: {
+    qrisEnabled: true,
+    cashEnabled: true,
+    cardEnabled: true,
+    autoConfirmQris: true,
+  },
+  user: {
+    qrisEnabled: true,
+    cashEnabled: false,
+    cardEnabled: false,
+  },
+};
+
+const createDefaultPaymentState = (): PaymentState => ({
+  cashier: { ...DEFAULT_PAYMENT_STATE.cashier },
+  user: { ...DEFAULT_PAYMENT_STATE.user },
+});
+
+type PaymentMethodDefinition = {
+  key: PaymentMethodKey;
+  label: string;
+  icon: string;
+  active: boolean;
+};
 
 export default function CartPage() {
   const router = useRouter();
-  const { lines, summary, updateQuantity, removeItem, tableId } = useCart();
+  const pathname = usePathname();
+  const {
+    lines,
+    summary,
+    updateQuantity,
+    removeItem,
+    tableId,
+    paymentMethod,
+    setPaymentMethod,
+  } = useCart();
+  const isCashierContext =
+    pathname?.startsWith("/cashier") ||
+    isCashierCardSlug(tableId) ||
+    isTakeawaySlug(tableId);
+  const baseMenuPath = isCashierContext ? "/cashier/menu" : "/menu";
+  const baseCartPath = isCashierContext ? "/cashier/cart" : "/cart";
   const [pendingRemove, setPendingRemove] = useState<number | null>(null);
+  const [paymentToggles, setPaymentToggles] = useState<PaymentState>(() =>
+    createDefaultPaymentState()
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const applyPaymentSettings = () => {
+      try {
+        const raw = window.localStorage.getItem(ADMIN_SETTINGS_STORAGE_KEY);
+        if (!raw) {
+          setPaymentToggles(createDefaultPaymentState());
+          return;
+        }
+        const parsed = JSON.parse(raw) as StoredAdminSettings;
+        const payment = parsed?.payment ?? {};
+        const cashier = (payment as { cashier?: Partial<CashierPaymentConfig> }).cashier ?? {};
+        const user = (payment as { user?: Partial<PaymentVisibility> }).user ?? {};
+        const resolveToggle = (
+          primary: unknown,
+          legacy: unknown,
+          fallback: boolean
+        ): boolean =>
+          typeof primary === "boolean"
+            ? primary
+            : typeof legacy === "boolean"
+            ? legacy
+            : fallback;
+
+        setPaymentToggles({
+          cashier: {
+            qrisEnabled: resolveToggle(
+              cashier.qrisEnabled,
+              payment.qrisEnabled,
+              DEFAULT_PAYMENT_STATE.cashier.qrisEnabled
+            ),
+            cashEnabled: resolveToggle(
+              cashier.cashEnabled,
+              payment.cashEnabled,
+              DEFAULT_PAYMENT_STATE.cashier.cashEnabled
+            ),
+            cardEnabled: resolveToggle(
+              cashier.cardEnabled,
+              payment.cardEnabled,
+              DEFAULT_PAYMENT_STATE.cashier.cardEnabled
+            ),
+            autoConfirmQris: resolveToggle(
+              cashier.autoConfirmQris,
+              payment.autoConfirmQris,
+              DEFAULT_PAYMENT_STATE.cashier.autoConfirmQris
+            ),
+          },
+          user: {
+            qrisEnabled: resolveToggle(
+              user.qrisEnabled,
+              payment.qrisEnabled,
+              DEFAULT_PAYMENT_STATE.user.qrisEnabled
+            ),
+            cashEnabled: resolveToggle(
+              user.cashEnabled,
+              payment.cashEnabled,
+              DEFAULT_PAYMENT_STATE.user.cashEnabled
+            ),
+            cardEnabled: resolveToggle(
+              user.cardEnabled,
+              payment.cardEnabled,
+              DEFAULT_PAYMENT_STATE.user.cardEnabled
+            ),
+          },
+        });
+      } catch (error) {
+        console.error("Failed to load admin payment settings", error);
+        setPaymentToggles(createDefaultPaymentState());
+      }
+    };
+
+    applyPaymentSettings();
+
+    const handleStorageUpdate = (event: StorageEvent) => {
+      if (event.key === ADMIN_SETTINGS_STORAGE_KEY) {
+        applyPaymentSettings();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageUpdate);
+    return () => {
+      window.removeEventListener("storage", handleStorageUpdate);
+    };
+  }, []);
 
   const withTableQuery = useCallback(
     (path: string) => {
-      if (!tableId) {
-        return path;
+      let targetPath = path;
+      if (isCashierContext && path.startsWith("/menu")) {
+        targetPath = path.replace("/menu", baseMenuPath);
       }
-      const [base, hash] = path.split("#");
+      if (!tableId) {
+        return targetPath;
+      }
+      const [base, hash] = targetPath.split("#");
       const separator = base.includes("?") ? "&" : "?";
-      return `${base}${separator}table=${encodeURIComponent(tableId)}${
+      return `${base}${separator}cards=${encodeURIComponent(tableId)}${
         hash ? `#${hash}` : ""
       }`;
     },
-    [tableId]
+    [baseMenuPath, isCashierContext, tableId]
   );
 
   const recommendations = useMemo(() => {
@@ -41,6 +207,51 @@ export default function CartPage() {
       .filter(({ product }) => !lines.some((line) => line.productId === product.id))
       .slice(0, 3);
   }, [lines]);
+
+  const currentPaymentOptions = isCashierContext
+    ? paymentToggles.cashier
+    : paymentToggles.user;
+
+  const paymentMethods: PaymentMethodDefinition[] = useMemo(
+    () => [
+      {
+        key: "qris",
+        label: "QRIS",
+        icon: "qr_code_2",
+        active: currentPaymentOptions.qrisEnabled,
+      },
+      {
+        key: "cash",
+        label: "Tunai",
+        icon: "payments",
+        active: currentPaymentOptions.cashEnabled,
+      },
+      {
+        key: "card",
+        label: "Kartu/Debit",
+        icon: "credit_card",
+        active: currentPaymentOptions.cardEnabled,
+      },
+    ],
+    [
+      currentPaymentOptions.qrisEnabled,
+      currentPaymentOptions.cashEnabled,
+      currentPaymentOptions.cardEnabled,
+    ]
+  );
+
+  useEffect(() => {
+    const activeKeys = paymentMethods.filter((method) => method.active).map((method) => method.key);
+    if (activeKeys.length === 0) {
+      if (paymentMethod !== null) {
+        setPaymentMethod(null);
+      }
+      return;
+    }
+    if (!paymentMethod || !activeKeys.includes(paymentMethod)) {
+      setPaymentMethod(activeKeys[0]);
+    }
+  }, [paymentMethods, paymentMethod, setPaymentMethod]);
 
   if (lines.length === 0) {
     return (
@@ -211,7 +422,7 @@ export default function CartPage() {
                     key={`recommend-${product.id}`}
                     product={product}
                     index={index}
-                    redirectTo="/cart"
+                    redirectTo={withTableQuery(baseCartPath)}
                   />
                 ))}
               </div>
@@ -255,12 +466,58 @@ export default function CartPage() {
 
           <section className="rounded-3xl bg-white/80 backdrop-blur shadow-sm p-6 space-y-4">
             <p className="text-sm font-semibold text-gray-700">Metode Pembayaran</p>
-            <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-gray-700 flex items-center justify-between">
-              <span className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-emerald-600">qr_code_2</span>
-                QRIS
-              </span>
-              <span className="material-symbols-outlined text-emerald-500 text-base">check_circle</span>
+            <div className="space-y-3">
+              {paymentMethods.map((method) => {
+                const isSelected = paymentMethod === method.key;
+                const baseButtonClass =
+                  "w-full flex items-center justify-between rounded-2xl border px-4 py-3 text-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
+                const stateClass = method.active
+                  ? isSelected
+                    ? "bg-emerald-50/90 border-emerald-200 text-emerald-700 shadow-sm"
+                    : "bg-white/80 border-white/70 text-gray-700 hover:border-emerald-200 hover:bg-white"
+                  : "bg-white/60 border-white/70 text-gray-400 cursor-not-allowed";
+
+                return (
+                  <button
+                    key={method.key}
+                    type="button"
+                    disabled={!method.active}
+                    onClick={() => method.active && setPaymentMethod(method.key)}
+                    className={`${baseButtonClass} ${stateClass}`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <span
+                        className={`material-symbols-outlined text-lg ${
+                          method.active ? "text-emerald-600" : "text-gray-400"
+                        }`}
+                      >
+                        {method.icon}
+                      </span>
+                      <span className="font-medium">{method.label}</span>
+                    </span>
+                    {method.active ? (
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-semibold ${
+                            isSelected ? "text-emerald-600" : "text-gray-400"
+                          }`}
+                        >
+                          {isSelected ? "Dipilih" : "Pilih"}
+                        </span>
+                        <span
+                          className={`material-symbols-outlined ${
+                            isSelected ? "text-emerald-500" : "text-gray-300"
+                          }`}
+                        >
+                          {isSelected ? "check_circle" : "radio_button_unchecked"}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-xs font-semibold text-gray-400">Sedang tidak aktif</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </section>
         </section>
@@ -289,8 +546,14 @@ export default function CartPage() {
 
           <button
             type="button"
-            className="cart-checkout-button w-full px-5 py-3 text-sm font-semibold text-white transition"
-            onClick={() => router.push("/checkout")}
+            disabled={!paymentMethod}
+            className="cart-checkout-button w-full px-5 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => {
+              if (!paymentMethod) {
+                return;
+              }
+              router.push("/checkout");
+            }}
           >
             Pesan Sekarang
           </button>

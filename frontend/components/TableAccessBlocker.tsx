@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatTableLabel } from "@/lib/tables";
 
 type TableAccessBlockerProps = {
   tableSlug: string | null;
@@ -19,8 +20,10 @@ export function TableAccessBlocker({
         <p className="text-sm text-gray-500">
           {tableSlug ? (
             <>
-              Maaf, QR untuk meja{" "}
-              <span className="font-semibold text-gray-700">{tableSlug}</span>{" "}
+              Maaf, QR untuk{" "}
+              <span className="font-semibold text-gray-700">
+                {formatTableLabel(tableSlug)}
+              </span>{" "}
               sementara tidak aktif. Silakan hubungi kasir atau pindah ke meja lain.
             </>
           ) : (

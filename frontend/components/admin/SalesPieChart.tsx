@@ -11,7 +11,6 @@ type PieDatum = {
 type SalesPieChartProps = {
   chartData: PieDatum[];
   listData: PieDatum[];
-  title?: string;
 };
 
 const COLORS = [
@@ -26,9 +25,9 @@ const COLORS = [
   "#2dd4bf",
 ];
 
-const CENTER = 110;
-const OUTER_RADIUS = 90;
-const INNER_RADIUS = 58;
+const CENTER = 120;
+const OUTER_RADIUS = 100;
+const INNER_RADIUS = 62;
 
 function polarToCartesian(centerX: number, centerY: number, radius: number, angleInDegrees: number) {
   const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
@@ -54,7 +53,7 @@ function describeDonutSegment(startAngle: number, endAngle: number) {
   ].join(" ");
 }
 
-export function SalesPieChart({ chartData, listData, title }: SalesPieChartProps) {
+export function SalesPieChart({ chartData, listData }: SalesPieChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -72,15 +71,6 @@ export function SalesPieChart({ chartData, listData, title }: SalesPieChartProps
   );
 
   const segments = useMemo(() => {
-    if (totalValue <= 0) {
-      return [] as Array<{
-        index: number;
-        start: number;
-        end: number;
-        color: string;
-      }>;
-    }
-
     let cursor = 0;
     return chartData
       .map((item, index) => {
@@ -97,9 +87,10 @@ export function SalesPieChart({ chartData, listData, title }: SalesPieChartProps
           start,
           end,
           color: COLORS[index % COLORS.length],
+          ratio,
         };
       })
-      .filter((segment): segment is { index: number; start: number; end: number; color: string } => Boolean(segment));
+      .filter((segment): segment is { index: number; start: number; end: number; color: string; ratio: number } => Boolean(segment));
   }, [chartData, totalValue]);
 
   const activeItem = activeIndex != null ? chartData[activeIndex] : null;
@@ -108,6 +99,13 @@ export function SalesPieChart({ chartData, listData, title }: SalesPieChartProps
   const displayLabel = activeItem?.label ?? "Total";
   const displayValue = activeItem?.value ?? totalValue;
   const displayQuantity = activeItem?.quantity ?? totalQuantity;
+  const displayPercentage = useMemo(() => {
+    if (totalValue <= 0) {
+      return null;
+    }
+    const ratio = displayValue / totalValue;
+    return `${(ratio * 100).toFixed(1)}%`;
+  }, [displayValue, totalValue]);
 
   const formatCurrency = (amount: number) =>
     amount.toLocaleString("id-ID", {
@@ -117,47 +115,55 @@ export function SalesPieChart({ chartData, listData, title }: SalesPieChartProps
     });
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(220px,1fr)_minmax(0,2fr)]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(260px,1fr)_minmax(0,2fr)]">
       <div className="flex items-center justify-center">
-        <div className="relative h-56 w-56">
+        <div className="relative h-64 w-64">
           <svg
             width="100%"
             height="100%"
-            viewBox="0 0 220 220"
+            viewBox="0 0 240 240"
             role="img"
             aria-label="Komposisi penjualan per kategori"
             onMouseLeave={() => setActiveIndex(null)}
           >
-            <circle cx={CENTER} cy={CENTER} r={OUTER_RADIUS} fill="#f1f5f9" />
-            {segments.length === 0
-              ? null
-              : segments.map((segment) => {
-                  const path = describeDonutSegment(segment.start, segment.end);
-                  const index = segment.index;
-                  const data = chartData[index];
-                  if (!data) {
-                    return null;
-                  }
-                  return (
-                    <path
-                      key={`${data.label}-${segment.start.toFixed(2)}`}
-                      d={path}
-                      fill={segment.color}
-                      fillOpacity={activeIndex == null || activeIndex === index ? 0.95 : 0.25}
-                      className="outline-none transition-all duration-150"
-                      onMouseEnter={() => setActiveIndex(index)}
-                      onFocus={() => setActiveIndex(index)}
-                      onBlur={() => setActiveIndex(null)}
-                      tabIndex={0}
-                    >
-                      <title>
-                        {`${data.label}: ${formatCurrency(Math.max(data.value, 0))} • ${Math.max(data.quantity, 0).toLocaleString("id-ID")} terjual`}
-                      </title>
-                    </path>
-                  );
-                })}
+            <defs>
+              <radialGradient id="pie-sheen" cx="50%" cy="45%" r="60%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.85)" />
+                <stop offset="100%" stopColor="rgba(241,245,249,0.4)" />
+              </radialGradient>
+            </defs>
+            <circle cx={CENTER} cy={CENTER} r={OUTER_RADIUS} fill="url(#pie-sheen)" />
+            {segments.map((segment) => {
+              const path = describeDonutSegment(segment.start, segment.end);
+              const index = segment.index;
+              const data = chartData[index];
+              if (!data) {
+                return null;
+              }
+              return (
+                <path
+                  key={`${data.label}-${segment.start.toFixed(2)}`}
+                  d={path}
+                  fill={segment.color}
+                  fillOpacity={activeIndex == null || activeIndex === index ? 0.92 : 0.25}
+                  className="outline-none transition-all duration-150"
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onFocus={() => setActiveIndex(index)}
+                  onBlur={() => setActiveIndex(null)}
+                  tabIndex={0}
+                />
+              );
+            })}
+            <circle
+              cx={CENTER}
+              cy={CENTER}
+              r={INNER_RADIUS - 4}
+              fill="rgba(255,255,255,0.92)"
+              stroke="rgba(15,118,110,0.08)"
+              strokeWidth={2}
+            />
           </svg>
-          <div className="pointer-events-none absolute inset-12 flex flex-col items-center justify-center rounded-full bg-white/95 text-center shadow-inner">
+          <div className="pointer-events-none absolute inset-10 flex flex-col items-center justify-center rounded-full bg-white/95 text-center shadow-inner">
             <p
               className="text-[10px] uppercase tracking-[0.35em] text-gray-400"
               style={activeColor ? { color: activeColor } : undefined}
@@ -170,8 +176,8 @@ export function SalesPieChart({ chartData, listData, title }: SalesPieChartProps
             <p className="text-[11px] font-medium text-emerald-600">
               {displayQuantity.toLocaleString("id-ID")} terjual
             </p>
-            {title ? (
-              <p className="mt-2 text-[11px] text-gray-500 px-4 leading-snug">{title}</p>
+            {displayPercentage ? (
+              <p className="mt-1 text-[11px] font-semibold text-gray-500">{displayPercentage}</p>
             ) : null}
           </div>
         </div>

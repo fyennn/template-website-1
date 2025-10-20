@@ -2,12 +2,14 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
 import { ALL_PRODUCTS_WITH_CATEGORY, type CategorySlug } from "@/lib/products";
 import { NAVIGATION, categoryToPath } from "@/lib/navigation";
 import { useTableAccess } from "@/hooks/useTableAccess";
 import { TableAccessBlocker } from "@/components/TableAccessBlocker";
+import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 const CATEGORY_LABEL_LOOKUP = NAVIGATION.reduce<Record<CategorySlug, string>>(
   (acc, item) => {
@@ -21,24 +23,40 @@ const CATEGORY_LABEL_LOOKUP = NAVIGATION.reduce<Record<CategorySlug, string>>(
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
+  const pathname = usePathname();
   const {
     tableAvailabilityChecked,
     currentTableSlug,
     tableActive,
   } = useTableAccess();
+  const isCashierContext =
+    pathname?.startsWith("/cashier") ||
+    isCashierCardSlug(currentTableSlug) ||
+    isTakeawaySlug(currentTableSlug);
+  const baseSearchPath = isCashierContext ? "/cashier/search" : "/search";
+  const toCashierPath = useCallback(
+    (path: string) => {
+      if (!isCashierContext) {
+        return path;
+      }
+      return path.startsWith("/menu") ? path.replace("/menu", "/cashier/menu") : path;
+    },
+    [isCashierContext]
+  );
 
   const withTableQuery = useCallback(
     (path: string) => {
+      const adjustedPath = toCashierPath(path);
       if (!currentTableSlug) {
-        return path;
+        return adjustedPath;
       }
-      const [base, hash] = path.split("#");
+      const [base, hash] = adjustedPath.split("#");
       const separator = base.includes("?") ? "&" : "?";
-      return `${base}${separator}table=${encodeURIComponent(currentTableSlug)}${
+      return `${base}${separator}cards=${encodeURIComponent(currentTableSlug)}${
         hash ? `#${hash}` : ""
       }`;
     },
-    [currentTableSlug]
+    [currentTableSlug, toCashierPath]
   );
 
   const resultsByCategory = useMemo(() => {
@@ -67,14 +85,14 @@ export default function SearchPage() {
   return (
     <AppShell activeSlug="all">
       {shouldBlockAccess ? (
-        <TableAccessBlocker
-          tableSlug={currentTableSlug}
-          retryHref={
-            currentTableSlug
-              ? `/search?table=${encodeURIComponent(currentTableSlug)}`
-              : "/menu"
-          }
-        />
+          <TableAccessBlocker
+            tableSlug={currentTableSlug}
+            retryHref={
+              currentTableSlug
+                ? `${baseSearchPath}?cards=${encodeURIComponent(currentTableSlug)}`
+                : toCashierPath("/menu")
+            }
+          />
       ) : (
         <div className="p-4 pb-24 space-y-8">
           <div className="max-w-3xl mx-auto">
