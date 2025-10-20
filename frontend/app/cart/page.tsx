@@ -13,29 +13,36 @@ import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 const ADMIN_SETTINGS_STORAGE_KEY = "spm-admin-settings";
 
-type PaymentVisibility = {
+type UserPaymentConfig = {
+  qrisEnabled: boolean;
+  shopeePayEnabled: boolean;
+  goPayEnabled: boolean;
+  ovoEnabled: boolean;
+  danaEnabled: boolean;
+};
+
+type CashierPaymentConfig = {
   qrisEnabled: boolean;
   cashEnabled: boolean;
   cardEnabled: boolean;
 };
 
-type CashierPaymentConfig = PaymentVisibility & {
-  autoConfirmQris: boolean;
-};
-
 type PaymentState = {
   cashier: CashierPaymentConfig;
-  user: PaymentVisibility;
+  user: UserPaymentConfig;
 };
 
 type StoredAdminSettings = {
   payment?: {
     cashier?: Partial<CashierPaymentConfig>;
-    user?: Partial<PaymentVisibility>;
+    user?: Partial<UserPaymentConfig>;
     cashEnabled?: boolean;
     cardEnabled?: boolean;
-    autoConfirmQris?: boolean;
     qrisEnabled?: boolean;
+    shopeePayEnabled?: boolean;
+    goPayEnabled?: boolean;
+    ovoEnabled?: boolean;
+    danaEnabled?: boolean;
     [key: string]: unknown;
   };
 };
@@ -45,12 +52,13 @@ const DEFAULT_PAYMENT_STATE: PaymentState = {
     qrisEnabled: true,
     cashEnabled: true,
     cardEnabled: true,
-    autoConfirmQris: true,
   },
   user: {
     qrisEnabled: true,
-    cashEnabled: false,
-    cardEnabled: false,
+    shopeePayEnabled: false,
+    goPayEnabled: false,
+    ovoEnabled: false,
+    danaEnabled: false,
   },
 };
 
@@ -62,8 +70,8 @@ const createDefaultPaymentState = (): PaymentState => ({
 type PaymentMethodDefinition = {
   key: PaymentMethodKey;
   label: string;
-  icon: string;
   active: boolean;
+  renderIcon: (isActive: boolean) => React.ReactNode;
 };
 
 export default function CartPage() {
@@ -104,7 +112,7 @@ export default function CartPage() {
         const parsed = JSON.parse(raw) as StoredAdminSettings;
         const payment = parsed?.payment ?? {};
         const cashier = (payment as { cashier?: Partial<CashierPaymentConfig> }).cashier ?? {};
-        const user = (payment as { user?: Partial<PaymentVisibility> }).user ?? {};
+        const user = (payment as { user?: Partial<UserPaymentConfig> }).user ?? {};
         const resolveToggle = (
           primary: unknown,
           legacy: unknown,
@@ -133,11 +141,6 @@ export default function CartPage() {
               payment.cardEnabled,
               DEFAULT_PAYMENT_STATE.cashier.cardEnabled
             ),
-            autoConfirmQris: resolveToggle(
-              cashier.autoConfirmQris,
-              payment.autoConfirmQris,
-              DEFAULT_PAYMENT_STATE.cashier.autoConfirmQris
-            ),
           },
           user: {
             qrisEnabled: resolveToggle(
@@ -145,15 +148,25 @@ export default function CartPage() {
               payment.qrisEnabled,
               DEFAULT_PAYMENT_STATE.user.qrisEnabled
             ),
-            cashEnabled: resolveToggle(
-              user.cashEnabled,
-              payment.cashEnabled,
-              DEFAULT_PAYMENT_STATE.user.cashEnabled
+            shopeePayEnabled: resolveToggle(
+              user.shopeePayEnabled,
+              (payment as { shopeePayEnabled?: boolean }).shopeePayEnabled,
+              DEFAULT_PAYMENT_STATE.user.shopeePayEnabled
             ),
-            cardEnabled: resolveToggle(
-              user.cardEnabled,
-              payment.cardEnabled,
-              DEFAULT_PAYMENT_STATE.user.cardEnabled
+            goPayEnabled: resolveToggle(
+              user.goPayEnabled,
+              (payment as { goPayEnabled?: boolean }).goPayEnabled,
+              DEFAULT_PAYMENT_STATE.user.goPayEnabled
+            ),
+            ovoEnabled: resolveToggle(
+              user.ovoEnabled,
+              (payment as { ovoEnabled?: boolean }).ovoEnabled,
+              DEFAULT_PAYMENT_STATE.user.ovoEnabled
+            ),
+            danaEnabled: resolveToggle(
+              user.danaEnabled,
+              (payment as { danaEnabled?: boolean }).danaEnabled,
+              DEFAULT_PAYMENT_STATE.user.danaEnabled
             ),
           },
         });
@@ -208,37 +221,185 @@ export default function CartPage() {
       .slice(0, 3);
   }, [lines]);
 
-  const currentPaymentOptions = isCashierContext
-    ? paymentToggles.cashier
-    : paymentToggles.user;
+  const materialIconRenderer = useCallback(
+    (iconName: string) =>
+      // eslint-disable-next-line react/display-name
+      (isActive: boolean) => (
+        <span
+          className={`material-symbols-outlined text-lg ${
+            isActive ? "text-emerald-600" : "text-gray-400"
+          }`}
+        >
+          {iconName}
+        </span>
+      ),
+    []
+  );
 
-  const paymentMethods: PaymentMethodDefinition[] = useMemo(
-    () => [
+  const renderShopeeIcon = useCallback(
+    (isActive: boolean) => (
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-xl transition-opacity"
+        style={{ opacity: isActive ? 1 : 0.4 }}
+      >
+        <svg width="32" height="32" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+          <path
+            fill="#FF5F00"
+            d="M11 13h14c1.657 0 3 1.343 3 3v12c0 1.657-1.343 3-3 3H11c-1.657 0-3-1.343-3-3V16c0-1.657 1.343-3 3-3z"
+          />
+          <path
+            fill="#FF5F00"
+            d="M22.5 12h-2.4c0-1.274-1.001-2.3-2.1-2.3s-2.1 1.026-2.1 2.3H13.5c0-2.499 2.05-4.7 4.5-4.7s4.5 2.201 4.5 4.7z"
+          />
+          <text
+            x="18"
+            y="25"
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="bold"
+            fill="#FFFFFF"
+            fontFamily="Inter, 'Helvetica Neue', Arial, sans-serif"
+          >
+            S
+          </text>
+        </svg>
+      </span>
+    ),
+    []
+  );
+
+  const renderGoPayIcon = useCallback(
+    (isActive: boolean) => (
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-xl transition-opacity"
+        style={{ opacity: isActive ? 1 : 0.4 }}
+      >
+        <svg width="32" height="32" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="gopayGradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#02C3FF" />
+              <stop offset="100%" stopColor="#0095DA" />
+            </linearGradient>
+          </defs>
+          <rect x="4" y="4" width="28" height="28" rx="14" fill="url(#gopayGradient)" />
+          <rect x="11" y="11" width="16" height="16" rx="6" fill="#FFFFFF" />
+          <rect x="14" y="13" width="10" height="2" rx="1" fill="#00AED6" opacity="0.7" />
+          <path
+            fill="#00AED6"
+            d="M24.4 20.1c0-.994-.82-1.8-1.82-1.8s-1.82.806-1.82 1.8c0 .662.35 1.245.88 1.554v1.676c0 .402.33.73.73.73h.42c.402 0 .73-.328.73-.73v-1.676c.53-.309.88-.892.88-1.554z"
+          />
+        </svg>
+      </span>
+    ),
+    []
+  );
+
+  const renderOvoIcon = useCallback(
+    (isActive: boolean) => (
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-xl transition-opacity"
+        style={{ opacity: isActive ? 1 : 0.4 }}
+      >
+        <svg width="32" height="32" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+          <circle cx="18" cy="18" r="14" fill="#4C2A85" />
+          <circle cx="18" cy="18" r="8.5" fill="none" stroke="#FFFFFF" strokeWidth="3" />
+        </svg>
+      </span>
+    ),
+    []
+  );
+
+  const renderDanaIcon = useCallback(
+    (isActive: boolean) => (
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-xl transition-opacity"
+        style={{ opacity: isActive ? 1 : 0.4 }}
+      >
+        <svg width="32" height="32" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="danaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#00A6FF" />
+              <stop offset="100%" stopColor="#0077D7" />
+            </linearGradient>
+          </defs>
+          <circle cx="18" cy="18" r="14" fill="url(#danaGradient)" />
+          <path
+            fill="#F8FBFF"
+            d="M10.4 16.2c0-.53.42-.97.95-1.01 2.1-.16 4.1-.83 6.09-1.57 2.28-.86 4.56-1.72 6.93-1.72 1.48 0 1.63.92 1.63 2.08v5.86c0 .69-.48 1.3-1.15 1.46-2.04.49-4.2 1.12-6.16 1.95-2.04.87-4.1 1.82-6.33 1.82-0.98 0-1.96-.62-1.96-1.59V16.2z"
+          />
+        </svg>
+      </span>
+    ),
+    []
+  );
+
+  const paymentMethods: PaymentMethodDefinition[] = useMemo(() => {
+    if (isCashierContext) {
+      const options = paymentToggles.cashier;
+      return [
+        {
+          key: "qris",
+          label: "QRIS",
+          active: options.qrisEnabled,
+          renderIcon: materialIconRenderer("qr_code_2"),
+        },
+        {
+          key: "cash",
+          label: "Tunai",
+          active: options.cashEnabled,
+          renderIcon: materialIconRenderer("payments"),
+        },
+        {
+          key: "card",
+          label: "Kartu/Debit",
+          active: options.cardEnabled,
+          renderIcon: materialIconRenderer("credit_card"),
+        },
+      ];
+    }
+
+    const options = paymentToggles.user;
+    return [
       {
         key: "qris",
         label: "QRIS",
-        icon: "qr_code_2",
-        active: currentPaymentOptions.qrisEnabled,
+        active: options.qrisEnabled,
+        renderIcon: materialIconRenderer("qr_code_2"),
       },
       {
-        key: "cash",
-        label: "Tunai",
-        icon: "payments",
-        active: currentPaymentOptions.cashEnabled,
+        key: "shopeepay",
+        label: "ShopeePay",
+        active: options.shopeePayEnabled,
+        renderIcon: renderShopeeIcon,
       },
       {
-        key: "card",
-        label: "Kartu/Debit",
-        icon: "credit_card",
-        active: currentPaymentOptions.cardEnabled,
+        key: "gopay",
+        label: "GoPay",
+        active: options.goPayEnabled,
+        renderIcon: renderGoPayIcon,
       },
-    ],
-    [
-      currentPaymentOptions.qrisEnabled,
-      currentPaymentOptions.cashEnabled,
-      currentPaymentOptions.cardEnabled,
-    ]
-  );
+      {
+        key: "ovo",
+        label: "OVO",
+        active: options.ovoEnabled,
+        renderIcon: renderOvoIcon,
+      },
+      {
+        key: "dana",
+        label: "Dana",
+        active: options.danaEnabled,
+        renderIcon: renderDanaIcon,
+      },
+    ];
+  }, [
+    isCashierContext,
+    materialIconRenderer,
+    paymentToggles,
+    renderDanaIcon,
+    renderGoPayIcon,
+    renderOvoIcon,
+    renderShopeeIcon,
+  ]);
 
   useEffect(() => {
     const activeKeys = paymentMethods.filter((method) => method.active).map((method) => method.key);
@@ -486,13 +647,7 @@ export default function CartPage() {
                     className={`${baseButtonClass} ${stateClass}`}
                   >
                     <span className="flex items-center gap-3">
-                      <span
-                        className={`material-symbols-outlined text-lg ${
-                          method.active ? "text-emerald-600" : "text-gray-400"
-                        }`}
-                      >
-                        {method.icon}
-                      </span>
+                      {method.renderIcon(method.active)}
                       <span className="font-medium">{method.label}</span>
                     </span>
                     {method.active ? (

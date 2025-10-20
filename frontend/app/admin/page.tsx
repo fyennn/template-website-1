@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/authStore";
 import { useOrders } from "@/lib/orderStore";
 import { formatTableLabel } from "@/lib/tables";
 import { PRODUCT_CATALOG } from "@/lib/products";
+import { ADMIN_ROLES, getAdminAccountsForSettings } from "@/lib/adminUsers";
 import type { ChangeEvent, FormEvent } from "react";
 
 type AdminNavKey = "dashboard" | "cashier" | "products" | "tables" | "kitchen" | "settings";
@@ -53,14 +54,32 @@ type AdminAccount = {
   lastLogin: string;
 };
 
+function computeInitials(source: string | undefined, fallback = "AD") {
+  if (!source) {
+    return fallback;
+  }
+  const initials = source
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+  return initials || fallback;
+}
+
 type PaymentAudienceOptions = {
+  qrisEnabled: boolean;
+  shopeePayEnabled: boolean;
+  goPayEnabled: boolean;
+  ovoEnabled: boolean;
+  danaEnabled: boolean;
+};
+
+type CashierPaymentOptions = {
   qrisEnabled: boolean;
   cashEnabled: boolean;
   cardEnabled: boolean;
-};
-
-type CashierPaymentOptions = PaymentAudienceOptions & {
-  autoConfirmQris: boolean;
 };
 
 type AdminSettings = {
@@ -443,14 +462,15 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
     bankAccountNumber: "1234567890",
     user: {
       qrisEnabled: true,
-      cashEnabled: false,
-      cardEnabled: false,
+      shopeePayEnabled: false,
+      goPayEnabled: false,
+      ovoEnabled: false,
+      danaEnabled: false,
     },
     cashier: {
       qrisEnabled: true,
       cashEnabled: true,
       cardEnabled: true,
-      autoConfirmQris: true,
     },
     serviceCharge: 5,
     taxRate: 10,
@@ -466,36 +486,32 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
     staffScheduleReminderTime: 1,
     staffScheduleGroupLink: "",
   },
-  adminAccounts: [
-    {
-      name: "Adit Pratama",
-      role: "Pemilik",
-      email: "adit@spmcafe.com",
-      phone: "+62 812-0000-1111",
-      status: "active",
-      lastLogin: "Hari ini, 08:45",
-    },
-    {
-      name: "Sinta Dewi",
-      role: "Manager",
-      email: "sinta@spmcafe.com",
-      phone: "+62 812-0000-2222",
-      status: "active",
-      lastLogin: "Kemarin, 17:20",
-    },
-  ],
+  adminAccounts: getAdminAccountsForSettings(),
+};
+
+type LegacyPaymentSettings = Partial<AdminSettings["payment"]> & {
+  cashEnabled?: boolean;
+  cardEnabled?: boolean;
+  qrisEnabled?: boolean;
+  shopeePayEnabled?: boolean;
+  goPayEnabled?: boolean;
+  ovoEnabled?: boolean;
+  danaEnabled?: boolean;
 };
 
 function normalizePaymentSettings(
   stored?: Partial<AdminSettings["payment"]> | null
 ): AdminSettings["payment"] {
   const base = DEFAULT_ADMIN_SETTINGS.payment;
-  const legacy = stored ?? undefined;
+  const legacy: LegacyPaymentSettings = stored ?? {};
   const {
     cashEnabled: legacyCashEnabled,
     cardEnabled: legacyCardEnabled,
-    autoConfirmQris: legacyAutoConfirmQris,
     qrisEnabled: legacyQrisEnabled,
+    shopeePayEnabled: legacyShopeePayEnabled,
+    goPayEnabled: legacyGoPayEnabled,
+    ovoEnabled: legacyOvoEnabled,
+    danaEnabled: legacyDanaEnabled,
     user: storedUser,
     cashier: storedCashier,
     ...rest
@@ -520,12 +536,21 @@ function normalizePaymentSettings(
   if (typeof legacyCardEnabled === "boolean") {
     normalized.cashier.cardEnabled = legacyCardEnabled;
   }
-  if (typeof legacyAutoConfirmQris === "boolean") {
-    normalized.cashier.autoConfirmQris = legacyAutoConfirmQris;
-  }
   if (typeof legacyQrisEnabled === "boolean") {
     normalized.cashier.qrisEnabled = legacyQrisEnabled;
     normalized.user.qrisEnabled = legacyQrisEnabled;
+  }
+  if (typeof legacyShopeePayEnabled === "boolean") {
+    normalized.user.shopeePayEnabled = legacyShopeePayEnabled;
+  }
+  if (typeof legacyGoPayEnabled === "boolean") {
+    normalized.user.goPayEnabled = legacyGoPayEnabled;
+  }
+  if (typeof legacyOvoEnabled === "boolean") {
+    normalized.user.ovoEnabled = legacyOvoEnabled;
+  }
+  if (typeof legacyDanaEnabled === "boolean") {
+    normalized.user.danaEnabled = legacyDanaEnabled;
   }
 
   return normalized;
@@ -603,12 +628,13 @@ function formatCategoryLabel(slug: string) {
     .join(" ");
 }
 
-const ADMIN_ROLE_OPTIONS = ["Pemilik", "Manager", "Supervisor", "Staff"] as const;
+const ADMIN_ROLE_OPTIONS = ADMIN_ROLES;
 const ROLE_DESCRIPTIONS: Record<typeof ADMIN_ROLE_OPTIONS[number], string> = {
-    Pemilik: "Akses penuh ke semua pengaturan dan data. Hanya bisa diatur oleh pemilik lain.",
-    Manager: "Bisa mengelola produk, pesanan, dan meja, serta melihat laporan penjualan.",
-    Supervisor: "Bisa mengelola pesanan dan meja, serta membantu staff.",
-    Staff: "Hanya bisa melihat pesanan yang masuk dan menandainya sebagai selesai.",
+  Pemilik: "Akses penuh ke semua pengaturan dan data. Hanya bisa diatur oleh pemilik lain.",
+  Manager: "Bisa mengelola produk, pesanan, dan meja, serta melihat laporan penjualan.",
+  Supervisor: "Bisa mengelola pesanan dan meja, serta membantu staff.",
+  "Staff Kasir": "Berfokus pada transaksi di kasir. Setelah login diarahkan langsung ke halaman kasir.",
+  "Staff Kitchen": "Berfokus pada dapur untuk menyiapkan pesanan. Setelah login diarahkan langsung ke halaman kitchen.",
 };
 
 type SettingsSectionKey =
@@ -806,7 +832,11 @@ function OrderListSection({
 
 export default function AdminPage() {
   const router = useRouter();
-  const { isAdmin, isReady, logout } = useAuth();
+  const { user, isAdmin, isReady, logout } = useAuth();
+  const displayName = user?.name ?? "Admin";
+  const displayEmail = user?.email ?? "admin@spmcafe.id";
+  const avatarColor = user?.avatarColor ?? "#34d399";
+  const avatarInitials = user?.avatarInitials ?? computeInitials(displayName);
   const { orders, markServed, clearOrders } = useOrders();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [activeKey, setActiveKey] = useState<AdminNavKey>("dashboard");
@@ -823,7 +853,7 @@ export default function AdminPage() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPhone, setNewAdminPhone] = useState("");
-  const [newAdminRole, setNewAdminRole] = useState<typeof ADMIN_ROLE_OPTIONS[number]>("Staff");
+  const [newAdminRole, setNewAdminRole] = useState<typeof ADMIN_ROLE_OPTIONS[number]>("Staff Kasir");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [savedSettings, setSavedSettings] = useState<AdminSettings | null>(null);
@@ -1598,7 +1628,7 @@ export default function AdminPage() {
     setAdminAccounts((prev) => [...prev, newAccount]);
     setNewAdminEmail("");
     setNewAdminPhone("");
-    setNewAdminRole("Staff");
+    setNewAdminRole("Staff Kasir");
     setAdminInviteError(null);
     setSaveMessage(`Undangan berhasil dikirim ke ${email}`);
     window.setTimeout(() => setSaveMessage(null), 2600);
@@ -2548,15 +2578,21 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center gap-4 text-sm text-gray-500">
               <span className="material-symbols-outlined text-base text-emerald-500">notifications</span>
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-full bg-emerald-100 text-emerald-600 grid place-items-center text-sm font-semibold">
-                  AD
+              <Link
+                href="/admin/profile"
+                className="flex items-center gap-2 rounded-full border border-transparent px-2 py-1 transition hover:border-emerald-100 hover:bg-emerald-50/60"
+              >
+                <div
+                  className="h-9 w-9 rounded-full grid place-items-center text-sm font-semibold text-white"
+                  style={{ backgroundColor: avatarColor }}
+                >
+                  {avatarInitials}
                 </div>
-                <div className="leading-tight">
-                  <p className="font-semibold text-gray-700">Admin</p>
-                  <p className="text-xs">admin@spmcafe.id</p>
+                <div className="leading-tight text-left">
+                  <p className="font-semibold text-gray-700">{displayName}</p>
+                  <p className="text-xs text-gray-500">{displayEmail}</p>
                 </div>
-              </div>
+              </Link>
               <div className="flex items-center gap-2">
                 <Link
                   href="/"
@@ -3490,8 +3526,10 @@ export default function AdminPage() {
                             <div className="space-y-2">
                               {[
                                 { field: "qrisEnabled" as const, label: "QRIS" },
-                                { field: "cashEnabled" as const, label: "Terima Tunai" },
-                                { field: "cardEnabled" as const, label: "Terima Kartu/Debit" },
+                                { field: "shopeePayEnabled" as const, label: "ShopeePay" },
+                                { field: "goPayEnabled" as const, label: "GoPay" },
+                                { field: "ovoEnabled" as const, label: "OVO" },
+                                { field: "danaEnabled" as const, label: "Dana" },
                               ].map((item) => (
                                 <label
                                   key={`user-${item.field}`}
@@ -3526,7 +3564,6 @@ export default function AdminPage() {
                                 { field: "qrisEnabled" as const, label: "QRIS" },
                                 { field: "cashEnabled" as const, label: "Terima Tunai" },
                                 { field: "cardEnabled" as const, label: "Terima Kartu/Debit" },
-                                { field: "autoConfirmQris" as const, label: "Otomatis Konfirmasi QRIS" },
                               ].map((item) => (
                                 <label
                                   key={`cashier-${item.field}`}
@@ -4176,7 +4213,7 @@ export default function AdminPage() {
                                 // Validate that the role is one of our valid options
                                 const validRole = ADMIN_ROLE_OPTIONS.includes(editingUser.role as typeof ADMIN_ROLE_OPTIONS[number]) 
                                     ? editingUser.role as typeof ADMIN_ROLE_OPTIONS[number] 
-                                    : "Staff"; // Default fallback
+                                    : "Staff Kasir"; // Default fallback
                                 handleUpdateUserRole(editingUser.email, validRole);
                                 setEditingUser(null);
                             }

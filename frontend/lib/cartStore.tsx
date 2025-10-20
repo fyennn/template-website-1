@@ -17,7 +17,14 @@ import {
   type CartSummary,
 } from "@/lib/cart";
 
-export type PaymentMethodKey = "qris" | "cash" | "card";
+export type PaymentMethodKey =
+  | "qris"
+  | "cash"
+  | "card"
+  | "shopeepay"
+  | "gopay"
+  | "ovo"
+  | "dana";
 
 export type CartContextValue = {
   items: CartItem[];
@@ -43,7 +50,13 @@ const TABLE_ACTIVE_KEY = "spm-cart-table-active";
 const PAYMENT_METHOD_KEY = "spm-cart-payment-method";
 
 const isPaymentMethodKey = (value: unknown): value is PaymentMethodKey =>
-  value === "qris" || value === "cash" || value === "card";
+  value === "qris" ||
+  value === "cash" ||
+  value === "card" ||
+  value === "shopeepay" ||
+  value === "gopay" ||
+  value === "ovo" ||
+  value === "dana";
 
 const normalizeCartOptions = (options: CartItem["options"]) =>
   options

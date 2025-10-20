@@ -4,41 +4,53 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/authStore";
+import { isRouteAllowedForRole, ROLE_DEFAULT_ROUTES } from "@/lib/adminUsers";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, isAdmin, isReady } = useAuth();
+  const { login, user, isReady } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const redirectTarget = useMemo(() => {
-    const value = searchParams?.get("redirect");
-    if (value && value.startsWith("/")) {
-      return value;
+    const query = searchParams?.get("redirect");
+    if (user && query && query.startsWith("/") && isRouteAllowedForRole(query, user.role)) {
+      return query;
+    }
+    if (user) {
+      return user.defaultRoute || ROLE_DEFAULT_ROUTES[user.role];
+    }
+    if (query && query.startsWith("/")) {
+      return query;
     }
     return "/admin";
-  }, [searchParams]);
+  }, [searchParams, user]);
 
   useEffect(() => {
     if (!isReady) {
       return;
     }
-    if (isAdmin) {
+    if (user) {
       router.replace(redirectTarget);
     }
-  }, [isAdmin, isReady, redirectTarget, router]);
+  }, [user, isReady, redirectTarget, router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
-    const success = await login({ email, password });
+    const account = await login({ email, password });
     setIsSubmitting(false);
-    if (success) {
-      router.replace(redirectTarget);
+    if (account) {
+      const query = searchParams?.get("redirect");
+      const fallback = account.defaultRoute || ROLE_DEFAULT_ROUTES[account.role];
+      const nextRoute = query && query.startsWith("/") && isRouteAllowedForRole(query, account.role)
+        ? query
+        : fallback;
+      router.replace(nextRoute);
     } else {
       setError("Email atau kata sandi tidak valid.");
     }
@@ -52,7 +64,7 @@ export default function LoginPage() {
     );
   }
 
-  if (isAdmin) {
+  if (user) {
     return null;
   }
 
