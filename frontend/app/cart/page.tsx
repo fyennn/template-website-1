@@ -12,6 +12,18 @@ import { useCart, type PaymentMethodKey } from "@/lib/cartStore";
 import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
 const ADMIN_SETTINGS_STORAGE_KEY = "spm-admin-settings";
+const PAYMENT_SETTINGS_EVENT = "spm:payment-updated";
+
+const formatPercentageDisplay = (value: number): string => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "0%";
+  }
+  const formatted = Number.isInteger(numeric)
+    ? numeric.toFixed(0)
+    : numeric.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}%`;
+};
 
 type UserPaymentConfig = {
   qrisEnabled: boolean;
@@ -184,9 +196,13 @@ export default function CartPage() {
       }
     };
 
+    const handlePaymentUpdated = () => applyPaymentSettings();
+
     window.addEventListener("storage", handleStorageUpdate);
+    window.addEventListener(PAYMENT_SETTINGS_EVENT, handlePaymentUpdated);
     return () => {
       window.removeEventListener("storage", handleStorageUpdate);
+      window.removeEventListener(PAYMENT_SETTINGS_EVENT, handlePaymentUpdated);
     };
   }, []);
 
@@ -685,8 +701,16 @@ export default function CartPage() {
                 <span>Subtotal</span>
                 <span>{summary.subtotalLabel}</span>
               </div>
+              {summary.serviceChargeRate > 0 || summary.serviceCharge > 0 ? (
+                <div className="flex justify-between text-gray-500">
+                  <span>
+                    Service Charge ({formatPercentageDisplay(summary.serviceChargeRate)})
+                  </span>
+                  <span>{summary.serviceChargeLabel}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between text-gray-500">
-                <span>Pajak (10%)</span>
+                <span>Pajak ({formatPercentageDisplay(summary.taxRate)})</span>
                 <span>{summary.taxLabel}</span>
               </div>
             </div>

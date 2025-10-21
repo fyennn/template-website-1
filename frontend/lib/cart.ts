@@ -78,24 +78,58 @@ export function deriveCartLines(cartItems: CartItem[]): DerivedCartLine[] {
 
 export type CartSummary = {
   subtotal: number;
+  serviceCharge: number;
   tax: number;
   total: number;
   subtotalLabel: string;
+  serviceChargeLabel: string;
   taxLabel: string;
   totalLabel: string;
+  serviceChargeRate: number;
+  taxRate: number;
 };
 
-export function computeCartSummary(cartItems: DerivedCartLine[]): CartSummary {
+export type CartChargeConfig = {
+  serviceChargeRate?: number;
+  taxRate?: number;
+};
+
+export const DEFAULT_SERVICE_CHARGE_RATE = 5;
+export const DEFAULT_TAX_RATE = 10;
+
+const clampPercentage = (value: number, fallback: number): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.min(100, Math.max(0, numeric));
+};
+
+export function computeCartSummary(
+  cartItems: DerivedCartLine[],
+  config?: CartChargeConfig
+): CartSummary {
   const subtotal = cartItems.reduce((total, item) => total + item.lineTotal, 0);
-  const tax = subtotal * 0.1;
-  const total = subtotal + tax;
+  const serviceChargeRate = clampPercentage(
+    config?.serviceChargeRate ?? DEFAULT_SERVICE_CHARGE_RATE,
+    DEFAULT_SERVICE_CHARGE_RATE
+  );
+  const taxRate = clampPercentage(config?.taxRate ?? DEFAULT_TAX_RATE, DEFAULT_TAX_RATE);
+  const serviceCharge = subtotal * (serviceChargeRate / 100);
+  const taxBase = subtotal + serviceCharge;
+  const tax = taxBase * (taxRate / 100);
+  const total = subtotal + serviceCharge + tax;
 
   return {
     subtotal,
+    serviceCharge,
     tax,
     total,
     subtotalLabel: formatCurrency(subtotal),
+    serviceChargeLabel: formatCurrency(serviceCharge),
     taxLabel: formatCurrency(tax),
     totalLabel: formatCurrency(total),
+    serviceChargeRate,
+    taxRate,
   };
 }

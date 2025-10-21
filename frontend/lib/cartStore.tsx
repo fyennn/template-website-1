@@ -13,6 +13,9 @@ import type { CartItem } from "@/lib/cart";
 import {
   deriveCartLines,
   computeCartSummary,
+  DEFAULT_SERVICE_CHARGE_RATE,
+  DEFAULT_TAX_RATE,
+  type CartChargeConfig,
   type DerivedCartLine,
   type CartSummary,
 } from "@/lib/cart";
@@ -48,6 +51,28 @@ const CartContext = createContext<CartContextValue | null>(null);
 const TABLE_STORAGE_KEY = "spm-cart-table";
 const TABLE_ACTIVE_KEY = "spm-cart-table-active";
 const PAYMENT_METHOD_KEY = "spm-cart-payment-method";
+const ADMIN_SETTINGS_STORAGE_KEY = "spm-admin-settings";
+const PAYMENT_SETTINGS_EVENT = "spm:payment-updated";
+
+type ChargeConfig = Required<Pick<CartChargeConfig, "serviceChargeRate" | "taxRate">>;
+
+const DEFAULT_CHARGE_CONFIG: ChargeConfig = {
+  serviceChargeRate: DEFAULT_SERVICE_CHARGE_RATE,
+  taxRate: DEFAULT_TAX_RATE,
+};
+
+const parsePercentage = (value: unknown, fallback: number): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.min(100, Math.max(0, value));
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.min(100, Math.max(0, parsed));
+    }
+  }
+  return fallback;
+};
 
 const isPaymentMethodKey = (value: unknown): value is PaymentMethodKey =>
   value === "qris" ||
@@ -120,6 +145,7 @@ export function CartProvider({
   const [tableId, setTableIdState] = useState<string | null>(null);
   const [tableActive, setTableActiveState] = useState(true);
   const [paymentMethod, setPaymentMethodState] = useState<PaymentMethodKey | null>(null);
+  const [chargeConfig, setChargeConfig] = useState<ChargeConfig>(DEFAULT_CHARGE_CONFIG);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -141,6 +167,53 @@ export function CartProvider({
     } catch (error) {
       console.error("Failed to restore cart state", error);
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const applyChargeConfig = () => {
+      try {
+        const raw = window.localStorage.getItem(ADMIN_SETTINGS_STORAGE_KEY);
+        if (!raw) {
+          setChargeConfig(DEFAULT_CHARGE_CONFIG);
+          return;
+        }
+        const parsed = JSON.parse(raw) as { payment?: Record<string, unknown> } | null;
+        const payment = parsed?.payment ?? {};
+        const serviceChargeRate = parsePercentage(
+          payment.serviceCharge,
+          DEFAULT_SERVICE_CHARGE_RATE
+        );
+        const taxRate = parsePercentage(payment.taxRate, DEFAULT_TAX_RATE);
+        setChargeConfig({
+          serviceChargeRate,
+          taxRate,
+        });
+      } catch (error) {
+        console.error("Failed to load payment charge settings", error);
+        setChargeConfig(DEFAULT_CHARGE_CONFIG);
+      }
+    };
+
+    applyChargeConfig();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === ADMIN_SETTINGS_STORAGE_KEY) {
+        applyChargeConfig();
+      }
+    };
+
+    const handleCustomUpdate = () => applyChargeConfig();
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(PAYMENT_SETTINGS_EVENT, handleCustomUpdate);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(PAYMENT_SETTINGS_EVENT, handleCustomUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -251,7 +324,10 @@ export function CartProvider({
   }, []);
 
   const lines = useMemo(() => deriveCartLines(items), [items]);
-  const summary = useMemo(() => computeCartSummary(lines), [lines]);
+  const summary = useMemo(
+    () => computeCartSummary(lines, chargeConfig),
+    [lines, chargeConfig]
+  );
 
   const value = useMemo(
     () => ({

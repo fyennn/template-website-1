@@ -26,6 +26,20 @@ function splitCurrency(label?: string | null) {
   };
 }
 
+const formatPercentageDisplay = (value?: number | null): string => {
+  if (value == null) {
+    return "0%";
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "0%";
+  }
+  const formatted = Number.isInteger(numeric)
+    ? numeric.toFixed(0)
+    : numeric.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}%`;
+};
+
 export default function OrderStatusPage() {
   const searchParams = useSearchParams();
   const orderId = searchParams?.get("orderId") ?? null;
@@ -58,6 +72,7 @@ export default function OrderStatusPage() {
     : baseMenuPath;
   const tableLabel = formatTableLabel(normalizedOrderSlug ?? normalizedQuerySlug);
   const subtotalDisplay = splitCurrency(order?.subtotalLabel);
+  const serviceChargeDisplay = splitCurrency(order?.serviceChargeLabel);
   const taxDisplay = splitCurrency(order?.taxLabel);
   const totalDisplay = splitCurrency(order?.totalLabel);
 
@@ -187,8 +202,19 @@ export default function OrderStatusPage() {
                   <span className="tabular-nums">{subtotalDisplay.amount}</span>
                 </span>
               </div>
+              {order?.serviceChargeLabel ? (
+                <div className="flex w-full items-baseline justify-between gap-6">
+                  <span>
+                    Service Charge ({formatPercentageDisplay(order?.serviceChargeRate)})
+                  </span>
+                  <span className="inline-flex items-baseline gap-1 font-semibold text-gray-700 whitespace-nowrap">
+                    {serviceChargeDisplay.currency ? <span>{serviceChargeDisplay.currency}</span> : null}
+                    <span className="tabular-nums">{serviceChargeDisplay.amount}</span>
+                  </span>
+                </div>
+              ) : null}
               <div className="flex w-full items-baseline justify-between gap-6">
-                <span>Pajak (10%)</span>
+                <span>Pajak ({formatPercentageDisplay(order?.taxRate)})</span>
                 <span className="inline-flex items-baseline gap-1 font-semibold text-gray-700 whitespace-nowrap">
                   {taxDisplay.currency ? <span>{taxDisplay.currency}</span> : null}
                   <span className="tabular-nums">{taxDisplay.amount}</span>

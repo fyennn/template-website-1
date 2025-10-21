@@ -8,6 +8,17 @@ import { CustomerInfoForm } from "@/components/CustomerInfoForm";
 import { useCart } from "@/lib/cartStore";
 import type { CustomerInfo } from "@/lib/orderStore";
 
+const formatPercentageDisplay = (value: number): string => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "0%";
+  }
+  const formatted = Number.isInteger(numeric)
+    ? numeric.toFixed(0)
+    : numeric.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}%`;
+};
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { lines, summary } = useCart();
@@ -103,8 +114,18 @@ export default function CheckoutPage() {
               <span className="text-gray-600">Subtotal</span>
               <span className="font-medium">{summary.subtotalLabel}</span>
             </div>
+            {summary.serviceChargeRate > 0 || summary.serviceCharge > 0 ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">
+                  Service Charge ({formatPercentageDisplay(summary.serviceChargeRate)})
+                </span>
+                <span className="font-medium">{summary.serviceChargeLabel}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Pajak (10%)</span>
+              <span className="text-gray-600">
+                Pajak ({formatPercentageDisplay(summary.taxRate)})
+              </span>
               <span className="font-medium">{summary.taxLabel}</span>
             </div>
             <div className="flex justify-between text-lg font-bold">

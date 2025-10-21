@@ -36,8 +36,12 @@ export type OrderEntry = {
   customerInfo?: CustomerInfo;
   subtotal: number;
   subtotalLabel: string;
+  serviceCharge?: number;
+  serviceChargeLabel?: string;
+  serviceChargeRate?: number;
   tax: number;
   taxLabel: string;
+  taxRate?: number;
   total: number;
   totalLabel: string;
   status: "pending" | "preparing" | "ready" | "served" | "cancelled";

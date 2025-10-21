@@ -21,6 +21,17 @@ const QR_PLACEHOLDER =
   <rect x="88" y="134" width="24" height="24" rx="6" fill="#0f766e"/>
 </svg>`);
 
+const formatPercentageDisplay = (value: number): string => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "0%";
+  }
+  const formatted = Number.isInteger(numeric)
+    ? numeric.toFixed(0)
+    : numeric.toFixed(2).replace(/\.?0+$/, "");
+  return `${formatted}%`;
+};
+
 function useCountdown(seconds: number) {
   const [remaining, setRemaining] = useState(seconds);
 
@@ -147,8 +158,12 @@ export default function QrisPaymentPage() {
         })(),
         subtotal: summary.subtotal,
         subtotalLabel: summary.subtotalLabel,
+        serviceCharge: summary.serviceCharge,
+        serviceChargeLabel: summary.serviceChargeLabel,
+        serviceChargeRate: summary.serviceChargeRate,
         tax: summary.tax,
         taxLabel: summary.taxLabel,
+        taxRate: summary.taxRate,
         total: summary.total,
         totalLabel: summary.totalLabel,
         status: "pending" as const,
@@ -226,8 +241,16 @@ export default function QrisPaymentPage() {
                 <span>Subtotal</span>
                 <span>{summary.subtotalLabel}</span>
               </div>
+              {summary.serviceChargeRate > 0 || summary.serviceCharge > 0 ? (
+                <div className="flex justify-between">
+                  <span>
+                    Service Charge ({formatPercentageDisplay(summary.serviceChargeRate)})
+                  </span>
+                  <span>{summary.serviceChargeLabel}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between">
-                <span>Pajak (10%)</span>
+                <span>Pajak ({formatPercentageDisplay(summary.taxRate)})</span>
                 <span>{summary.taxLabel}</span>
               </div>
               <div className="flex justify-between">

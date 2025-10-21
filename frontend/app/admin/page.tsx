@@ -10,8 +10,8 @@ import { useAuth } from "@/lib/authStore";
 import { useOrders } from "@/lib/orderStore";
 import { formatTableLabel } from "@/lib/tables";
 import { PRODUCT_CATALOG } from "@/lib/products";
-import { ADMIN_ROLES, getAdminAccountsForSettings } from "@/lib/adminUsers";
-import type { ChangeEvent, FormEvent } from "react";
+import { getAdminAccountsForSettings } from "@/lib/adminUsers";
+import type { ChangeEvent } from "react";
 
 type AdminNavKey = "dashboard" | "cashier" | "products" | "tables" | "kitchen" | "settings";
 
@@ -52,6 +52,24 @@ type AdminAccount = {
   phone: string;
   status: "active" | "pending" | "inactive";
   lastLogin: string;
+};
+
+const ADMIN_STATUS_META: Record<
+  AdminAccount["status"],
+  { label: string; className: string }
+> = {
+  active: {
+    label: "Aktif",
+    className: "bg-emerald-100 text-emerald-600",
+  },
+  inactive: {
+    label: "Nonaktif",
+    className: "bg-gray-100 text-gray-500",
+  },
+  pending: {
+    label: "Menunggu",
+    className: "bg-amber-100 text-amber-600",
+  },
 };
 
 function computeInitials(source: string | undefined, fallback = "AD") {
@@ -628,14 +646,6 @@ function formatCategoryLabel(slug: string) {
     .join(" ");
 }
 
-const ADMIN_ROLE_OPTIONS = ADMIN_ROLES;
-const ROLE_DESCRIPTIONS: Record<typeof ADMIN_ROLE_OPTIONS[number], string> = {
-  Pemilik: "Akses penuh ke semua pengaturan dan data. Hanya bisa diatur oleh pemilik lain.",
-  Manager: "Bisa mengelola produk, pesanan, dan meja, serta melihat laporan penjualan.",
-  Supervisor: "Bisa mengelola pesanan dan meja, serta membantu staff.",
-  "Staff Kasir": "Berfokus pada transaksi di kasir. Setelah login diarahkan langsung ke halaman kasir.",
-  "Staff Kitchen": "Berfokus pada dapur untuk menyiapkan pesanan. Setelah login diarahkan langsung ke halaman kitchen.",
-};
 
 type SettingsSectionKey =
   | "store"
@@ -848,18 +858,11 @@ export default function AdminPage() {
   const [pendingDeleteTable, setPendingDeleteTable] = useState<TableEntry | null>(null);
   const [settings, setSettings] = useState<AdminSettings>(() => createDefaultSettings());
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
-  const [showRoleInfo, setShowRoleInfo] = useState(false);
-  const [editingUser, setEditingUser] = useState<AdminAccount | null>(null);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [newAdminEmail, setNewAdminEmail] = useState("");
-  const [newAdminPhone, setNewAdminPhone] = useState("");
-  const [newAdminRole, setNewAdminRole] = useState<typeof ADMIN_ROLE_OPTIONS[number]>("Staff Kasir");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [savedSettings, setSavedSettings] = useState<AdminSettings | null>(null);
   const [savedAdminAccounts, setSavedAdminAccounts] = useState<AdminAccount[]>([]);
   const [pendingSave, setPendingSave] = useState(false);
-  const [adminInviteError, setAdminInviteError] = useState<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionKey>("store");
   const settingsHydratedRef = useRef(false);
@@ -875,6 +878,7 @@ export default function AdminPage() {
     message: string;
   } | null>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [isCategoryDeleteMode, setIsCategoryDeleteMode] = useState(false);
 
   const isEditingProduct = Boolean(editingProductId);
 
@@ -1158,13 +1162,9 @@ export default function AdminPage() {
   };
 
   const handleResetCategoryIcon = (slug: string) => {
-    const isDefault = DEFAULT_CATEGORY_OPTIONS.includes(slug);
     const fallbackIcon = DEFAULT_CATEGORY_ICONS[slug] ?? DEFAULT_NEW_CATEGORY_ICON;
     setCategoryIconValue(slug, fallbackIcon);
-    showCategoryMessage(
-      `Ikon kategori ${formatCategoryLabel(slug)} dikembalikan ke ${isDefault ? "ikon bawaan" : "ikon standar"}.`,
-      2000
-    );
+    showCategoryMessage(`Ikon kategori ${formatCategoryLabel(slug)} dikembalikan ke ikon awal.`, 2000);
   };
 
   const handleAddCategory = () => {
@@ -1177,11 +1177,6 @@ export default function AdminPage() {
     const slug = slugifyCategoryName(trimmed);
     if (!slug) {
       showCategoryMessage("Nama kategori tidak valid.");
-      return;
-    }
-
-    if (DEFAULT_CATEGORY_OPTIONS.includes(slug)) {
-      showCategoryMessage("Kategori bawaan sudah tersedia.");
       return;
     }
 
@@ -1207,20 +1202,25 @@ export default function AdminPage() {
   };
 
   const handleRemoveCategory = (slug: string) => {
-    if (DEFAULT_CATEGORY_OPTIONS.includes(slug)) {
-      showCategoryMessage("Kategori bawaan tidak bisa dihapus.");
+    const nextOptions = categoryOptions.filter((item) => item !== slug);
+    if (nextOptions.length === 0) {
+      showCategoryMessage("Minimal harus ada satu kategori tersisa.");
       return;
     }
 
-    setCategoryOptions((prev) => prev.filter((item) => item !== slug));
+    const fallback = nextOptions[0];
+
+    setCategoryOptions(nextOptions);
     setCategoryIcons((prev) => {
       const next = { ...prev };
       delete next[slug];
       return next;
     });
-    setProducts((prev) => prev.map((product) => (product.category === slug ? { ...product, category: fallbackCategory } : product)));
-    setProductForm((prev) => (prev.category === slug ? { ...prev, category: fallbackCategory } : prev));
-    showCategoryMessage("Kategori dihapus dari daftar. Produk yang menggunakan kategori tersebut dipindah ke kategori default.", 2200);
+    setProducts((prev) =>
+      prev.map((product) => (product.category === slug ? { ...product, category: fallback } : product))
+    );
+    setProductForm((prev) => (prev.category === slug ? { ...prev, category: fallback } : prev));
+    showCategoryMessage(`Kategori ${formatCategoryLabel(slug)} dihapus. Produk dipindahkan ke ${formatCategoryLabel(fallback)}.`, 2200);
     setIsDirty(true);
   };
 
@@ -1314,28 +1314,6 @@ export default function AdminPage() {
       ...prev,
       customizations: prev.customizations.filter((group) => group.id !== groupId),
     }));
-  };
-
-  const handleResetCategories = () => {
-    const fallback = DEFAULT_CATEGORY_OPTIONS[0] ?? "pistachio-series";
-    setCategoryOptions([...DEFAULT_CATEGORY_OPTIONS]);
-    setCategoryIcons({ ...DEFAULT_CATEGORY_ICONS });
-    setProducts((prev) =>
-      prev.map((product) =>
-        DEFAULT_CATEGORY_OPTIONS.includes(product.category)
-          ? product
-          : { ...product, category: fallback }
-      )
-    );
-    setProductForm((prev) =>
-      DEFAULT_CATEGORY_OPTIONS.includes(prev.category)
-        ? prev
-        : { ...prev, category: fallback }
-    );
-    setNewCategoryName("");
-    setNewCategoryIcon(DEFAULT_NEW_CATEGORY_ICON);
-    showCategoryMessage("Kategori dikembalikan ke default.", 2000);
-    setIsDirty(true);
   };
 
   const addEmptyCustomizationGroup = () => {
@@ -1599,78 +1577,6 @@ export default function AdminPage() {
     setIsDirty(true);
   };
 
-  const handleAddAdminAccount = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const email = newAdminEmail.trim();
-    if (!email) {
-      setAdminInviteError("Email wajib diisi sebelum mengundang admin baru.");
-      return;
-    }
-    const isDuplicate = adminAccounts.some(
-      (account) => account.email.toLowerCase() === email.toLowerCase()
-    );
-    if (isDuplicate) {
-      setAdminInviteError("Email tersebut sudah terdaftar sebagai admin.");
-      return;
-    }
-
-    const nameFromEmail = email.includes("@") ? email.split("@")[0] : email;
-
-    const newAccount: AdminAccount = {
-      name: nameFromEmail.replace(/\./g, " "),
-      role: newAdminRole,
-      email,
-      phone: newAdminPhone.trim(),
-      status: "pending",
-      lastLogin: "Belum pernah masuk",
-    };
-    setIsDirty(true);
-    setAdminAccounts((prev) => [...prev, newAccount]);
-    setNewAdminEmail("");
-    setNewAdminPhone("");
-    setNewAdminRole("Staff Kasir");
-    setAdminInviteError(null);
-    setSaveMessage(`Undangan berhasil dikirim ke ${email}`);
-    window.setTimeout(() => setSaveMessage(null), 2600);
-  };
-
-  const handleRemoveAdmin = (email: string) => {
-    setAdminAccounts((prev) => prev.filter((account) => account.email !== email));
-    setSaveMessage(`Pengguna dengan email ${email} telah dihapus.`);
-    window.setTimeout(() => setSaveMessage(null), 2600);
-    setIsDirty(true);
-  };
-
-  const handleToggleUserStatus = (email: string) => {
-    setAdminAccounts(prev => prev.map(acc => {
-      if (acc.email === email) {
-        const newStatus = acc.status === 'active' ? 'inactive' : 'active';
-        setSaveMessage(`Status pengguna ${acc.name} diubah menjadi ${newStatus}.`);
-        window.setTimeout(() => setSaveMessage(null), 2600);
-        return {...acc, status: newStatus};
-      }
-      return acc;
-    }));
-    setIsDirty(true);
-  };
-  
-  const handleResendInvitation = (email: string) => {
-    setSaveMessage(`Undangan telah dikirim ulang ke ${email}.`);
-    window.setTimeout(() => setSaveMessage(null), 2600);
-  };
-
-  const handleUpdateUserRole = (email: string, role: typeof ADMIN_ROLE_OPTIONS[number]) => {
-    setAdminAccounts(prev => prev.map(acc => {
-      if (acc.email === email) {
-        setSaveMessage(`Peran pengguna ${acc.name} diubah menjadi ${role}.`);
-        window.setTimeout(() => setSaveMessage(null), 2600);
-        return {...acc, role};
-      }
-      return acc;
-    }));
-    setIsDirty(true);
-  };
-
   useEffect(() => {
     if (!isReady) {
       return;
@@ -1736,6 +1642,7 @@ export default function AdminPage() {
         };
         window.localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(payload));
         window.dispatchEvent(new Event("spm:categories-updated"));
+        window.dispatchEvent(new Event("spm:payment-updated"));
       }
       setSavedSettings(settings);
       setSavedAdminAccounts(adminAccounts);
@@ -1891,6 +1798,7 @@ export default function AdminPage() {
     setNewCategoryName("");
     setNewCategoryIcon(DEFAULT_NEW_CATEGORY_ICON);
     setCategoryMessage(null);
+    setIsCategoryDeleteMode(false);
     setIsDirty(false);
     setSaveMessage("Perubahan dibatalkan.");
     window.setTimeout(() => setSaveMessage(null), 1800);
@@ -3287,17 +3195,38 @@ export default function AdminPage() {
                               >
                                 Tambah kategori
                               </button>
-                              <button
-                                type="button"
-                                onClick={handleResetCategories}
-                                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-500 shadow-sm transition hover:bg-gray-100"
-                              >
-                                Reset ke default
-                              </button>
                             </div>
                             <p className="text-[11px] text-gray-500">
                               Gunakan ikon yang sama dengan tema produk agar navigasi menu terasa konsisten.
                             </p>
+                          </div>
+
+                          <div className="rounded-2xl border border-red-100 bg-gradient-to-br from-red-50/70 to-white p-5 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-700">Kelola kategori</p>
+                                <p className="text-xs text-gray-500">
+                                  Aktifkan mode hapus untuk menghapus kategori.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setIsCategoryDeleteMode((prev) => !prev)}
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                                  isCategoryDeleteMode
+                                    ? "border border-red-200 bg-red-50 text-red-600"
+                                    : "border border-emerald-200 bg-white text-emerald-600"
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                                {isCategoryDeleteMode ? "Batalkan" : "Aktifkan"}
+                              </button>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {isCategoryDeleteMode
+                                ? "Pilih kategori di daftar untuk dihapus. Minimal satu kategori harus tersisa."
+                                : "Tombol hapus akan muncul pada kategori setelah mode diaktifkan."}
+                            </div>
                           </div>
                         </div>
 
@@ -3309,36 +3238,24 @@ export default function AdminPage() {
                               ? CATEGORY_ICON_CHOICES
                               : [trimmedIconValue, ...CATEGORY_ICON_CHOICES];
                             const selectOptions = Array.from(new Set(optionCandidates));
-                            const isDefaultCategory = DEFAULT_CATEGORY_OPTIONS.includes(category);
 
                             return (
                               <div
                                 key={category}
                                 className="rounded-3xl border border-emerald-100 bg-white/90 px-5 py-4 shadow-sm transition hover:shadow-md"
                               >
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                                      <CategoryIcon value={iconValue} className="text-base" />
-                                    </span>
-                                    <div>
-                                      <p className="text-sm font-semibold text-gray-800">
-                                        {formatCategoryLabel(category)}
-                                      </p>
-                                      <p className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
-                                        {category}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <span
-                                    className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] ${
-                                      isDefaultCategory
-                                        ? "bg-emerald-100 text-emerald-600"
-                                        : "bg-slate-100 text-slate-500"
-                                    }`}
-                                  >
-                                    {isDefaultCategory ? "Default" : "Custom"}
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                                    <CategoryIcon value={iconValue} className="text-base" />
                                   </span>
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-800">
+                                      {formatCategoryLabel(category)}
+                                    </p>
+                                    <p className="text-[11px] uppercase tracking-[0.25em] text-gray-400">
+                                      {category}
+                                    </p>
+                                  </div>
                                 </div>
 
                                 <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -3369,7 +3286,7 @@ export default function AdminPage() {
                                   >
                                     Reset ikon
                                   </button>
-                                  {!isDefaultCategory ? (
+                                  {isCategoryDeleteMode ? (
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveCategory(category)}
@@ -3904,148 +3821,35 @@ export default function AdminPage() {
                               <th className="px-4 py-3">Email</th>
                               <th className="px-4 py-3">Peran</th>
                               <th className="px-4 py-3">Status</th>
-                              <th className="px-4 py-3 text-right">Aksi</th>
+                              <th className="px-4 py-3">Terakhir Aktif</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-emerald-50 bg-white/60">
-                            {adminAccounts.filter(acc => acc.status !== 'pending').map((account) => (
-                              <tr key={account.email} className="text-gray-600">
-                                <td className="px-4 py-3 font-medium text-gray-700">{account.name}</td>
-                                <td className="px-4 py-3">{account.email}</td>
-                                <td className="px-4 py-3">{account.role}</td>
-                                <td className="px-4 py-3">
-                                  <span
-                                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                      account.status === "active"
-                                        ? "bg-emerald-100 text-emerald-600"
-                                        : "bg-gray-100 text-gray-500"
-                                    }`}
-                                  >
-                                    {account.status === 'active' ? 'Aktif' : 'Nonaktif'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right">
-                                  <div className="relative inline-block text-left">
-                                    <button type="button" className="rounded-full p-1 hover:bg-gray-200" onClick={() => setOpenDropdown(openDropdown === account.email ? null : account.email)} disabled={account.role === 'Pemilik'}>
-                                      <span className="material-symbols-outlined">more_vert</span>
-                                    </button>
-                                    {openDropdown === account.email && (
-                                      <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
-                                        <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                                          <button onClick={() => { setEditingUser(account); setOpenDropdown(null); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Edit</button>
-                                          <button onClick={() => { handleToggleUserStatus(account.email); setOpenDropdown(null); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">{account.status === 'active' ? 'Nonaktifkan' : 'Aktifkan'}</button>
-                                          <button onClick={() => { handleRemoveAdmin(account.email); setOpenDropdown(null); }} className="block w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-gray-100" role="menuitem">Hapus</button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="mt-6">
-                        <h3 className="text-lg font-semibold text-gray-700">Undangan Tertunda</h3>
-                        <div className="mt-2 overflow-x-auto">
-                          <table className="min-w-full divide-y divide-emerald-100 text-sm">
-                            <thead className="bg-emerald-50/40 text-left text-xs font-semibold uppercase tracking-[0.25em] text-gray-500">
-                              <tr>
-                                <th className="px-4 py-3">Email</th>
-                                <th className="px-4 py-3">Peran</th>
-                                <th className="px-4 py-3 text-right">Aksi</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-emerald-50 bg-white/60">
-                              {adminAccounts.filter(acc => acc.status === 'pending').map((account) => (
+                            {adminAccounts.map((account) => {
+                              const statusMeta = ADMIN_STATUS_META[account.status] ?? ADMIN_STATUS_META.inactive;
+                              const lastLoginLabel =
+                                account.lastLogin && account.lastLogin.trim().length > 0
+                                  ? account.lastLogin
+                                  : "Belum ada aktivitas";
+                              return (
                                 <tr key={account.email} className="text-gray-600">
+                                  <td className="px-4 py-3 font-medium text-gray-700">{account.name}</td>
                                   <td className="px-4 py-3">{account.email}</td>
                                   <td className="px-4 py-3">{account.role}</td>
-                                  <td className="px-4 py-3 text-right space-x-2">
-                                    <button onClick={() => handleResendInvitation(account.email)} className="text-emerald-600 hover:underline text-xs">Kirim Ulang</button>
-                                    <button onClick={() => handleRemoveAdmin(account.email)} className="text-red-500 hover:underline text-xs">Batalkan</button>
+                                  <td className="px-4 py-3">
+                                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                                      {statusMeta.label}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <p className="text-sm font-medium text-gray-700">{lastLoginLabel}</p>
+                                    <p className="text-xs text-gray-400">Terakhir login</p>
                                   </td>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 p-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-gray-700">Undang Admin Baru</p>
-                            <button onClick={() => setShowRoleInfo(true)} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
-                                <span className="material-symbols-outlined text-sm">info</span>
-                                <span>Info Peran</span>
-                            </button>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Kirim undangan ke email untuk memberikan akses dashboard. Undangan berlaku 24 jam.
-                        </p>
-                        <form onSubmit={handleAddAdminAccount} className="mt-4 grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <label htmlFor="invite-email" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Email Admin
-                            </label>
-                            <input
-                              id="invite-email"
-                              type="email"
-                              value={newAdminEmail}
-                              onChange={(event) => setNewAdminEmail(event.target.value)}
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                              placeholder="nama@perusahaan.com"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label htmlFor="invite-phone" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Nomor WhatsApp (opsional)
-                            </label>
-                            <input
-                              id="invite-phone"
-                              type="tel"
-                              value={newAdminPhone}
-                              onChange={(event) => setNewAdminPhone(event.target.value)}
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                              placeholder="+62 ..."
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label htmlFor="invite-role" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                              Peran
-                            </label>
-                            <select
-                              id="invite-role"
-                              value={newAdminRole}
-                              onChange={(event) =>
-                                setNewAdminRole(event.target.value as (typeof ADMIN_ROLE_OPTIONS)[number])
-                              }
-                              className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                            >
-                              {ADMIN_ROLE_OPTIONS.map((role) => (
-                                <option key={role} value={role}>
-                                  {role}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="flex items-end">
-                            <button
-                              type="submit"
-                              className="w-full rounded-full bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-emerald-600 transition"
-                            >
-                              Kirim Undangan
-                            </button>
-                          </div>
-                          {adminInviteError ? (
-                            <p className="md:col-span-2 text-xs font-semibold text-red-500">{adminInviteError}</p>
-                          ) : (
-                            <p className="md:col-span-2 text-xs text-gray-400">
-                              Admin baru akan diminta membuat kata sandi ketika menerima undangan.
-                            </p>
-                          )}
-                        </form>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   ) : null}
@@ -4148,83 +3952,6 @@ export default function AdminPage() {
           </div>
         </div>
       ) : null}
-      {showRoleInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800">Deskripsi Peran</h3>
-                <div className="space-y-3 text-sm">
-                    {ADMIN_ROLE_OPTIONS.map(role => (
-                        <div key={role}>
-                            <p className="font-semibold text-gray-700">{role}</p>
-                            <p className="text-xs text-gray-500">{ROLE_DESCRIPTIONS[role]}</p>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex justify-end">
-                    <button
-                        type="button"
-                        className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600"
-                        onClick={() => setShowRoleInfo(false)}
-                    >
-                        Tutup
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl bg-white/95 p-6 shadow-xl space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800">Edit Pengguna</h3>
-                <p className="text-sm text-gray-600">Mengedit: <span className="font-semibold">{editingUser.name}</span></p>
-                <div className="space-y-2">
-                  <label htmlFor="edit-role" className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
-                    Peran
-                  </label>
-                  <select
-                    id="edit-role"
-                    value={editingUser.role}
-                    onChange={(event) =>
-                      setEditingUser(prev => prev ? {...prev, role: event.target.value as typeof ADMIN_ROLE_OPTIONS[number]} : null)
-                    }
-                    className="w-full rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-gray-700 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                  >
-                    {ADMIN_ROLE_OPTIONS.map((role) => (
-                      <option key={role} value={role} disabled={role === 'Pemilik'}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center justify-end gap-3">
-                    <button
-                        type="button"
-                        className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100"
-                        onClick={() => setEditingUser(null)}
-                    >
-                        Batalkan
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-600"
-                        onClick={() => {
-                            if(editingUser) {
-                                // Validate that the role is one of our valid options
-                                const validRole = ADMIN_ROLE_OPTIONS.includes(editingUser.role as typeof ADMIN_ROLE_OPTIONS[number]) 
-                                    ? editingUser.role as typeof ADMIN_ROLE_OPTIONS[number] 
-                                    : "Staff Kasir"; // Default fallback
-                                handleUpdateUserRole(editingUser.email, validRole);
-                                setEditingUser(null);
-                            }
-                        }}
-                    >
-                        Simpan
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
     </>
   );
 }
