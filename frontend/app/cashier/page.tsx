@@ -62,9 +62,21 @@ const BASE_CARD_CONFIGS: CardConfig[] = [
 
 const BASE_SEAT_COUNT = BASE_CARD_CONFIGS.filter((card) => card.slug !== "takeaway").length;
 
+const fallbackInitials = (source?: string | null) => {
+  if (!source) return "KS";
+  const parts = source
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase());
+  return parts.join("") || "KS";
+};
+
 export default function AdminCashierPage() {
   const router = useRouter();
-  const { isAdmin, isReady } = useRequireAdmin();
+  const auth = useRequireAdmin();
+  const { isAdmin, isReady, user, logout } = auth;
   const { orders } = useOrders();
   const [extraCards, setExtraCards] = useState<CardConfig[]>([]);
   const [removedBaseCards, setRemovedBaseCards] = useState<string[]>([]);
@@ -81,6 +93,7 @@ export default function AdminCashierPage() {
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardSlug, setNewCardSlug] = useState("");
   const [addCardError, setAddCardError] = useState<string | null>(null);
+  const isCashierAccount = user?.role === "Staff Kasir";
   const nextCardSuggestion = useMemo(() => {
     const seatCodes = cardConfigs
       .filter((card) => card.slug !== "takeaway")
@@ -198,6 +211,8 @@ export default function AdminCashierPage() {
     takeawayCards: activeTakeawayCards,
     tableCards: occupiedTableCards,
   } = activeOrdersInfo;
+
+
 
   const activeTableLabels = useMemo(
     () => occupiedTableCards.map((card) => card.label),
@@ -527,21 +542,47 @@ export default function AdminCashierPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-50 transition"
-            >
-              <span className="material-symbols-outlined text-base">arrow_back</span>
-              Dashboard Admin
-            </Link>
-            <div className="hidden sm:flex flex-col items-end text-sm text-gray-500">
-              <span>Kartu siap pakai</span>
-              <span className="text-lg font-semibold text-emerald-600">
-                {availability.available}/{availability.total}
-              </span>
+          {isCashierAccount ? (
+            <div className="inline-flex items-center gap-3 rounded-3xl border border-emerald-100 bg-white/90 px-5 py-3 shadow-sm">
+              <Link
+                href="/admin/profile"
+                className="flex items-center gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-full"
+              >
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-sm font-semibold text-white">
+                  {user?.avatarInitials || fallbackInitials(user?.name)}
+                </div>
+                <div className="leading-tight">
+                  <p className="text-sm font-semibold text-gray-800">{user?.name ?? "Kasir"}</p>
+                  <p className="text-xs text-gray-500">{user?.email}</p>
+                </div>
+              </Link>
+              <div className="ml-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
+                >
+                  Keluar
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-50 transition"
+              >
+                <span className="material-symbols-outlined text-base">arrow_back</span>
+                Dashboard Admin
+              </Link>
+              <div className="hidden sm:flex flex-col items-end text-sm text-gray-500">
+                <span>Kartu siap pakai</span>
+                <span className="text-lg font-semibold text-emerald-600">
+                  {availability.available}/{availability.total}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 

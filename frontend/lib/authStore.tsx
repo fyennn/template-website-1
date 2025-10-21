@@ -19,6 +19,11 @@ import {
   updateAdminPassword,
   verifyAdminPassword,
 } from "@/lib/adminUsers";
+import {
+  heartbeatAdminPresence,
+  markAdminActive,
+  markAdminInactive,
+} from "@/lib/adminPresence";
 
 export type AuthenticatedAdmin = {
   name: string;
@@ -58,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedAdmin | null>(null);
   const [isReady, setIsReady] = useState(false);
   const logoutTimerRef = useRef<number | null>(null);
+  const heartbeatRef = useRef<number | null>(null);
+  const sessionEmailRef = useRef<string | null>(null);
+  const sessionRoleRef = useRef<AdminRole | null>(null);
 
   const clearScheduledLogout = useCallback(() => {
     if (logoutTimerRef.current) {
@@ -66,14 +74,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const stopPresenceHeartbeat = useCallback(() => {
+    if (heartbeatRef.current) {
+      window.clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  }, []);
+
+  const startPresenceHeartbeat = useCallback(
+    (email: string, role: AdminRole | null) => {
+      if (typeof window === "undefined" || !email) {
+        return;
+      }
+      stopPresenceHeartbeat();
+      sessionEmailRef.current = email;
+      sessionRoleRef.current = role ?? null;
+      heartbeatAdminPresence(email, role ?? null);
+      heartbeatRef.current = window.setInterval(() => {
+        heartbeatAdminPresence(email, role ?? null);
+      }, 30_000);
+    },
+    [stopPresenceHeartbeat]
+  );
+
   const logout = useCallback(() => {
     clearScheduledLogout();
-    setUser(null);
+    stopPresenceHeartbeat();
+    setUser((previous) => {
+      if (previous) {
+        markAdminInactive(previous.email);
+      }
+      return null;
+    });
     setIsReady(true);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
     }
-  }, [clearScheduledLogout]);
+    sessionEmailRef.current = null;
+    sessionRoleRef.current = null;
+  }, [clearScheduledLogout, stopPresenceHeartbeat]);
 
   const scheduleLogout = useCallback(
     (delay: number) => {
@@ -88,6 +127,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [clearScheduledLogout, logout]
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleBeforeUnload = () => {
+      if (sessionEmailRef.current) {
+        markAdminInactive(sessionEmailRef.current);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -118,6 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               avatarInitials: account.avatarInitials,
               bio: account.bio,
             });
+            markAdminActive(account.email, account.role);
+            startPresenceHeartbeat(account.email, account.role);
             scheduleLogout(remaining);
             setIsReady(true);
             return;
@@ -131,9 +185,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.localStorage.removeItem(STORAGE_KEY);
     }
     setIsReady(true);
-  }, [scheduleLogout]);
+  }, [scheduleLogout, startPresenceHeartbeat]);
 
-  useEffect(() => () => clearScheduledLogout(), [clearScheduledLogout]);
+  useEffect(
+    () => () => {
+      clearScheduledLogout();
+      stopPresenceHeartbeat();
+    },
+    [clearScheduledLogout, stopPresenceHeartbeat]
+  );
 
   const login = useCallback(
     async ({ email, password }: { email: string; password: string }) => {
@@ -150,6 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           bio: account.bio,
         };
         setUser(authenticated);
+        markAdminActive(authenticated.email, authenticated.role);
+        startPresenceHeartbeat(authenticated.email, authenticated.role);
         setIsReady(true);
         const payload = {
           value: true,
@@ -162,7 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return null;
     },
-    [scheduleLogout]
+    [scheduleLogout, startPresenceHeartbeat]
   );
 
   const updateProfile = useCallback(
@@ -194,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: merged.bio,
       };
       setUser(refreshed);
+      heartbeatAdminPresence(refreshed.email, refreshed.role);
       setIsReady(true);
       return refreshed;
     },

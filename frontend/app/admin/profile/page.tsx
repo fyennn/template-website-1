@@ -47,6 +47,7 @@ export default function AdminProfilePage() {
     return null;
   }
 
+  const isCashier = user.role === "Staff Kasir";
   const initials = avatarInitials || getInitials(displayName || user.name);
   const activeColor = avatarColor || DEFAULT_COLOR_OPTIONS[0];
 
@@ -101,7 +102,7 @@ export default function AdminProfilePage() {
             </div>
           </div>
           <Link
-            href={ROLE_DEFAULT_ROUTES[user.role] ?? "/admin"}
+            href={isCashier ? "/cashier" : ROLE_DEFAULT_ROUTES[user.role] ?? "/admin"}
             className="rounded-full border border-emerald-200 bg-white/60 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition"
           >
             Kembali ke Dashboard

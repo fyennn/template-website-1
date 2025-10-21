@@ -3,14 +3,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { CategoryIcon } from "@/components/CategoryIcon";
-import { useAuth } from "@/lib/authStore";
+import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 import { useOrders } from "@/lib/orderStore";
 import { formatTableLabel } from "@/lib/tables";
 import { PRODUCT_CATALOG } from "@/lib/products";
 import { getAdminAccountsForSettings } from "@/lib/adminUsers";
+import {
+  ADMIN_ACTIVITY_THRESHOLD_MS,
+  ADMIN_PRESENCE_EVENT,
+  ADMIN_PRESENCE_STORAGE_KEY,
+  loadAdminPresence,
+  type AdminPresenceRecord,
+} from "@/lib/adminPresence";
 import type { ChangeEvent } from "react";
 
 type AdminNavKey = "dashboard" | "cashier" | "products" | "tables" | "kitchen" | "settings";
@@ -54,23 +60,84 @@ type AdminAccount = {
   lastLogin: string;
 };
 
-const ADMIN_STATUS_META: Record<
-  AdminAccount["status"],
-  { label: string; className: string }
-> = {
-  active: {
-    label: "Aktif",
-    className: "bg-emerald-100 text-emerald-600",
-  },
-  inactive: {
-    label: "Nonaktif",
-    className: "bg-gray-100 text-gray-500",
-  },
-  pending: {
-    label: "Menunggu",
-    className: "bg-amber-100 text-amber-600",
-  },
-};
+const ONLINE_STATUS_CLASS = "bg-emerald-100 text-emerald-600";
+const OFFLINE_STATUS_CLASS = "bg-gray-100 text-gray-500";
+const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat("id-ID", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("id-ID", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function resolvePresenceStatus(
+  presence: AdminPresenceRecord | undefined,
+  now: number
+) {
+  if (!presence) {
+    return { label: "Offline", className: OFFLINE_STATUS_CLASS, isActive: false };
+  }
+  const isActive =
+    presence.active && now - presence.lastSeen <= ADMIN_ACTIVITY_THRESHOLD_MS;
+  return {
+    label: isActive ? "Aktif" : "Offline",
+    className: isActive ? ONLINE_STATUS_CLASS : OFFLINE_STATUS_CLASS,
+    isActive,
+  };
+}
+
+function formatRelativeTimestamp(timestamp: number, now: number) {
+  const diff = Math.max(0, now - timestamp);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) {
+    return "Baru saja";
+  }
+  if (diff < hour) {
+    const minutes = Math.floor(diff / minute);
+    return `${minutes} menit lalu`;
+  }
+  if (diff < day) {
+    const hours = Math.floor(diff / hour);
+    return `${hours} jam lalu`;
+  }
+  if (diff < 2 * day) {
+    return `Kemarin, ${TIME_ONLY_FORMATTER.format(new Date(timestamp))}`;
+  }
+  if (diff < 7 * day) {
+    const days = Math.floor(diff / day);
+    return `${days} hari lalu, ${TIME_ONLY_FORMATTER.format(new Date(timestamp))}`;
+  }
+  return DATE_TIME_FORMATTER.format(new Date(timestamp));
+}
+
+function resolveLastActivityDisplay(
+  presence: AdminPresenceRecord | undefined,
+  now: number,
+  fallback?: string
+) {
+  if (!presence) {
+    return {
+      label: fallback ?? "Belum pernah login",
+      caption: fallback ? "Terakhir login" : "Belum pernah login",
+    };
+  }
+  const baseTimestamp = presence.active
+    ? presence.lastSeen
+    : Math.max(presence.lastSeen, presence.lastLogin);
+  if (!baseTimestamp) {
+    return {
+      label: fallback ?? "Belum pernah login",
+      caption: fallback ? "Terakhir login" : "Belum pernah login",
+    };
+  }
+  return {
+    label: formatRelativeTimestamp(baseTimestamp, now),
+    caption: presence.active ? "Sedang aktif" : "Terakhir aktif",
+  };
+}
 
 function computeInitials(source: string | undefined, fallback = "AD") {
   if (!source) {
@@ -841,8 +908,8 @@ function OrderListSection({
 }
 
 export default function AdminPage() {
-  const router = useRouter();
-  const { user, isAdmin, isReady, logout } = useAuth();
+  const auth = useRequireAdmin();
+  const { user, isAdmin, isReady, logout } = auth;
   const displayName = user?.name ?? "Admin";
   const displayEmail = user?.email ?? "admin@spmcafe.id";
   const avatarColor = user?.avatarColor ?? "#34d399";
@@ -879,6 +946,8 @@ export default function AdminPage() {
   } | null>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isCategoryDeleteMode, setIsCategoryDeleteMode] = useState(false);
+  const [presenceMap, setPresenceMap] = useState<Record<string, AdminPresenceRecord>>({});
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const isEditingProduct = Boolean(editingProductId);
 
@@ -907,6 +976,38 @@ export default function AdminPage() {
     return currencyFormatter.format(numeric);
   }, [productForm.price, currencyFormatter]);
   const productImagePreview = productForm.imagePreviewUrl || productForm.imageUrl || "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const syncPresence = () => {
+      setPresenceMap(loadAdminPresence());
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === ADMIN_PRESENCE_STORAGE_KEY) {
+        syncPresence();
+      }
+    };
+    const handlePresenceEvent = () => syncPresence();
+    syncPresence();
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(ADMIN_PRESENCE_EVENT, handlePresenceEvent);
+    const interval = window.setInterval(syncPresence, 60_000);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(ADMIN_PRESENCE_EVENT, handlePresenceEvent);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const interval = window.setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1577,17 +1678,10 @@ export default function AdminPage() {
     setIsDirty(true);
   };
 
-  useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-    if (!isAdmin) {
-      router.replace("/login");
-    }
-  }, [isAdmin, isReady, router]);
+  const canBootstrapSettings = isAdmin && isReady;
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!canBootstrapSettings) {
       return;
     }
     if (settingsHydratedRef.current) {
@@ -1623,7 +1717,7 @@ export default function AdminPage() {
       setSavedAdminAccounts(fallback.adminAccounts);
       setIsDirty(false);
     }
-  }, [isAdmin]);
+  }, [canBootstrapSettings]);
 
   // Persist only when user clicks Save
   useEffect(() => {
@@ -2972,32 +3066,34 @@ export default function AdminPage() {
                     </div>
                   ) : null}
 
-                  <div className="flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={handleCancelAll}
-                      disabled={!isDirty}
-                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
-                        isDirty
-                          ? "border-gray-200 text-gray-600 hover:bg-gray-100"
-                          : "border-gray-100 text-gray-400 cursor-not-allowed"
-                      }`}
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveAll}
-                      disabled={!isDirty}
-                      className={`rounded-full px-4 py-2 text-xs font-semibold transition shadow ${
-                        isDirty
-                          ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                          : "bg-emerald-100 text-emerald-400 cursor-not-allowed"
-                      }`}
-                    >
-                      Simpan Perubahan
-                    </button>
-                  </div>
+                  {activeSettingsSection !== "access" ? (
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={handleCancelAll}
+                        disabled={!isDirty}
+                        className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                          isDirty
+                            ? "border-gray-200 text-gray-600 hover:bg-gray-100"
+                            : "border-gray-100 text-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveAll}
+                        disabled={!isDirty}
+                        className={`rounded-full px-4 py-2 text-xs font-semibold transition shadow ${
+                          isDirty
+                            ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                            : "bg-emerald-100 text-emerald-400 cursor-not-allowed"
+                        }`}
+                      >
+                        Simpan Perubahan
+                      </button>
+                    </div>
+                  ) : null}
 
                   {activeSettingsSection === "store" ? (
                     <div className="rounded-2xl border border-emerald-100 bg-white/80 shadow-sm p-6">
@@ -3825,29 +3921,35 @@ export default function AdminPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-emerald-50 bg-white/60">
-                            {adminAccounts.map((account) => {
-                              const statusMeta = ADMIN_STATUS_META[account.status] ?? ADMIN_STATUS_META.inactive;
-                              const lastLoginLabel =
-                                account.lastLogin && account.lastLogin.trim().length > 0
-                                  ? account.lastLogin
-                                  : "Belum ada aktivitas";
-                              return (
-                                <tr key={account.email} className="text-gray-600">
-                                  <td className="px-4 py-3 font-medium text-gray-700">{account.name}</td>
-                                  <td className="px-4 py-3">{account.email}</td>
-                                  <td className="px-4 py-3">{account.role}</td>
-                                  <td className="px-4 py-3">
-                                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
-                                      {statusMeta.label}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <p className="text-sm font-medium text-gray-700">{lastLoginLabel}</p>
-                                    <p className="text-xs text-gray-400">Terakhir login</p>
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                          {adminAccounts.map((account) => {
+                            const presenceKey = account.email.toLowerCase();
+                            const presence = presenceMap[presenceKey];
+                            const statusMeta = resolvePresenceStatus(presence, nowTick);
+                            const fallbackLabel = account.lastLogin && account.lastLogin.trim().length > 0
+                              ? account.lastLogin
+                              : undefined;
+                            const lastActivity = resolveLastActivityDisplay(
+                              presence,
+                              nowTick,
+                              fallbackLabel
+                            );
+                            return (
+                              <tr key={account.email} className="text-gray-600">
+                                <td className="px-4 py-3 font-medium text-gray-700">{account.name}</td>
+                                <td className="px-4 py-3">{account.email}</td>
+                                <td className="px-4 py-3">{account.role}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.className}`}>
+                                    {statusMeta.label}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <p className="text-sm font-medium text-gray-700">{lastActivity.label}</p>
+                                  <p className="text-xs text-gray-400">{lastActivity.caption}</p>
+                                </td>
+                              </tr>
+                            );
+                          })}
                           </tbody>
                         </table>
                       </div>

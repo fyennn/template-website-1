@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useOrders, type OrderEntry } from "@/lib/orderStore";
 import { formatTableLabel } from "@/lib/tables";
 
@@ -14,7 +14,11 @@ const statusConfig = {
   cancelled: { label: "Dibatalkan", color: "bg-red-100 text-red-800", icon: "cancel" }
 };
 
-export function OrderList() {
+type OrderListProps = {
+  liveUpdatesSlot?: ReactNode;
+};
+
+export function OrderList({ liveUpdatesSlot }: OrderListProps) {
   const { orders, updateOrderStatus } = useOrders();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,7 +85,11 @@ export function OrderList() {
               <p className="text-sm text-gray-600 truncate">Monitoring real-time</p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2" />
+          {liveUpdatesSlot ? (
+            <div className="flex justify-end">{liveUpdatesSlot}</div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2" />
+          )}
         </div>
 
         {/* Desktop Header */}
@@ -97,7 +105,7 @@ export function OrderList() {
               <p className="text-gray-600 mt-1">Monitoring real-time untuk semua aktivitas pesanan</p>
             </div>
           </div>
-          <div className="flex gap-3" />
+          {liveUpdatesSlot ? <div className="flex items-center gap-3">{liveUpdatesSlot}</div> : <div className="flex gap-3" />}
         </div>
 
         {/* Responsive Stats Cards */}
