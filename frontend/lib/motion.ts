@@ -172,6 +172,11 @@ export function setupMotionEffects() {
   }
 
   prefersReducedMotion = reduceMotionQuery?.matches ?? false;
+  const root = document.documentElement;
+  const previousReadyState = root.classList.contains("motion-ready");
+  if (!previousReadyState) {
+    root.classList.add("motion-ready");
+  }
 
   hydrateCardAnimations();
   hydrateEntranceAnimations();
@@ -204,6 +209,9 @@ export function setupMotionEffects() {
 
   return () => {
     cleanupFns.forEach((cleanup) => cleanup());
+    if (!previousReadyState) {
+      root.classList.remove("motion-ready");
+    }
   };
 }
 

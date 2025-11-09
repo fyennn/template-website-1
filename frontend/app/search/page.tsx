@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
-import { ALL_PRODUCTS_WITH_CATEGORY, type CategorySlug } from "@/lib/products";
+import { type CategorySlug } from "@/lib/products";
+import { useProductCatalogData } from "@/hooks/useProductCatalog";
 import { NAVIGATION, categoryToPath } from "@/lib/navigation";
 import { useTableAccess } from "@/hooks/useTableAccess";
 import { TableAccessBlocker } from "@/components/TableAccessBlocker";
@@ -29,6 +30,7 @@ export default function SearchPage() {
     currentTableSlug,
     tableActive,
   } = useTableAccess();
+  const { allProductsWithCategory } = useProductCatalogData();
   const isCashierContext =
     pathname?.startsWith("/cashier") ||
     isCashierCardSlug(currentTableSlug) ||
@@ -62,8 +64,8 @@ export default function SearchPage() {
   const resultsByCategory = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
     const base = trimmed.length === 0
-      ? ALL_PRODUCTS_WITH_CATEGORY
-      : ALL_PRODUCTS_WITH_CATEGORY.filter(({ product }) =>
+      ? allProductsWithCategory
+      : allProductsWithCategory.filter(({ product }) =>
           product.name.toLowerCase().includes(trimmed) ||
           product.description.toLowerCase().includes(trimmed)
         );
@@ -77,7 +79,7 @@ export default function SearchPage() {
     });
 
     return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [query]);
+  }, [query, allProductsWithCategory]);
 
   const shouldBlockAccess =
     tableAvailabilityChecked && (!currentTableSlug || !tableActive);

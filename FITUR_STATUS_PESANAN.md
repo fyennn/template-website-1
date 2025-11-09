@@ -1,4 +1,4 @@
-# Sistem Manajemen Pesanan SPM Café - Lengkap
+# Sistem Manajemen Pesanan AIVRA - Lengkap
 
 ## Deskripsi
 Sistem manajemen pesanan yang komprehensif dengan informasi lengkap customer, tracking status real-time, dan dashboard admin untuk mengelola pesanan. Sistem ini mencakup banner status pesanan di halaman menu, form customer info, dan halaman admin yang detail.

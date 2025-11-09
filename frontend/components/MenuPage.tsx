@@ -7,6 +7,7 @@ import { CategoryIcon } from "@/components/CategoryIcon";
 import type { NavigationItem } from "@/lib/navigation";
 import { useNavigationWithIcons } from "@/hooks/useNavigationWithIcons";
 import type { CategorySlug, Product } from "@/lib/products";
+import { useProductCatalogData } from "@/hooks/useProductCatalog";
 import { setupMotionEffects } from "@/lib/motion";
 import { Header } from "@/components/Header";
 import { CategoryPills } from "@/components/CategoryPills";
@@ -17,24 +18,27 @@ import { useTableAccess } from "@/hooks/useTableAccess";
 import { TableAccessBlocker } from "@/components/TableAccessBlocker";
 import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
 
-type MenuSection = {
-  slug: CategorySlug;
-  label: string;
-  products: Product[];
-};
-
 export type MenuPageProps = {
   navigation: NavigationItem[];
-  sections: MenuSection[];
 };
 
 const gridClassName =
   "p-4 pb-24 space-y-12 md:space-y-16";
 
-export function MenuPageContent({ navigation, sections }: MenuPageProps) {
+export function MenuPageContent({ navigation }: MenuPageProps) {
   const pathname = usePathname();
   const initialActiveSlug = navigation[0]?.slug ?? "all";
   const navItems = useNavigationWithIcons(navigation);
+  const { catalog } = useProductCatalogData();
+  const sections = useMemo<MenuSection[]>(() => {
+    return navigation
+      .filter((item) => item.slug !== "all")
+      .map((item) => ({
+        slug: item.slug as CategorySlug,
+        label: item.label,
+        products: catalog[item.slug] ?? [],
+      }));
+  }, [navigation, catalog]);
   const [activeSlug, setActiveSlug] = useState<CategorySlug>(initialActiveSlug);
   const allSentinelRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -214,7 +218,7 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
           <div className="px-6 pb-4 pt-6 border-b border-emerald-100/60 bg-white/80 backdrop-blur">
             <Image
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsiHIdLAZymKywmghuMJ4DnMud2B6E1CzythChBRnHHYVHHbyl717uDSqWpl530JlSId2MxEhHz78ptp-CAGshOvKKeU9yud3F4M4aQ6eGYrrGAfZBnIse5F98soktjbyVpPmo_QeNCMUndjKVj8Tc4qNpY6Fd3XEJkiMJCiMi9BbOHNbuJvjmD_ePxe-FZuGXvShGRktUkdCK47mqzUCgo_fSHO3Kfbnef25GdcamaiYNuBKN1iyAT8Nv7P_0pTtXbuLOcKV1ObM"
-              alt="SPM Café Logo"
+              alt="AIVRA Logo"
               className="h-10 w-auto enter-animated enter-from-left enter-duration-short"
               data-animate-delay="40"
               width={160}
@@ -322,3 +326,8 @@ export function MenuPageContent({ navigation, sections }: MenuPageProps) {
     </div>
   );
 }
+type MenuSection = {
+  slug: CategorySlug;
+  label: string;
+  products: Product[];
+};

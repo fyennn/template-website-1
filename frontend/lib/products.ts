@@ -7,41 +7,77 @@ export type Product = {
 };
 
 export type ProductCatalog = Record<string, Product[]>;
+export type CategorySlug = string;
 
-export const PRODUCT_CATALOG = {
-  all: [] as Product[],
+export type CustomizationOption = {
+  id: string;
+  label: string;
+  priceAdjustment: number;
+};
+
+export type CustomizationGroup = {
+  id: string;
+  name: string;
+  type: "single" | "multiple";
+  required: boolean;
+  helperText?: string;
+  options: CustomizationOption[];
+};
+
+export type AdminProductRecord = {
+  id: string;
+  name: string;
+  category: CategorySlug;
+  price: number;
+  description: string;
+  sku: string;
+  imageUrl: string;
+  highlight: string;
+  isAvailable: boolean;
+  isFeatured: boolean;
+  soldOut: boolean;
+  hotOption: boolean;
+  icedOption: boolean;
+  prepTime: string;
+  calories: string;
+  createdAt: string;
+  customizations: CustomizationGroup[];
+};
+
+export const PRODUCTS_STORAGE_KEY = "spm-admin-products";
+export const PRODUCTS_EVENT = "spm:products-updated";
+
+const PRODUCT_PLACEHOLDER_IMAGE = "/images/product-placeholder.svg";
+
+const DEFAULT_PRODUCT_SOURCE: Record<CategorySlug, Product[]> = {
   "pistachio-series": [
     {
       id: "pistachio-latte",
       name: "Pistachio Latte",
       description: "Creamy pistachio flavor with espresso",
       price: 55000,
-      image:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuBZ6c9w2xX2kDiuabOBwANz7uF-RlHvb5-M45NrSbvbnLTN0ftsnUf9HjJjqVLAMgwSw17xI3Sn_IZjdUflf7rw0sirs6pcbq5URj0mrYxoQ0vNq0id-53cCFRtlLzkt2CTGyG76CiADHW5eyOmhGQEhylw2Qr_VvQX_VE1XtDjNtUVz3-bzG4UJ8pzBjGFuQdmgfl30oK1TbN4_4Y5W-6-5Qp7cp5gxpA-GgvnakgO3Jdlr1a0slJMrdPqZXsomuhiHkaRET7IJqM",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "pistachio-frappe",
       name: "Pistachio Frappe",
       description: "Blended pistachio and coffee delight",
       price: 60000,
-      image:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuCPRuJyjjcBRIY5WEStZ6ZLv7a4XG72wgVWJFSksPWGdCc7S5qGLDZjkbHRI7ul3YeKuY5KLlMYu_p4y4y08wgRNT_hQirWfOOAxiGM9UhxRKdwSGACRANopzsIfI__Hy42w-PYanLfHnj4VJMLC3WbxpTMJdmT8IajLPd5iXn93r6LBfcxCOz4p7ipBMg9l04H8grlcsUuHqGqWImotG6v6Qjoa38vOVx5K8leF7N24mF3siIpOxK61xZtv596_zzkt7GsLWls-bM",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "iced-pistachio-coffee",
       name: "Iced Pistachio Coffee",
       description: "Refreshing iced coffee with pistachio",
       price: 57500,
-      image:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuCUc7dT-hPrNfOwZDAv7et5bCtW2s5nFhhNIen1Ob6w3c2T_Q6G1N4QI1h8TrpTyWJcQ33cWQAZjrqU2Ky3dEaaBvDfV_dJVVjxjS8nfn-I3bzziGpM0bSuJM9DvF8Nbg8WGFrqfI4re71JxCxEm_saQiLI_uYemtmiCgc-8aO9fpITVfDKBq8aL6to_Em4rFntc6Ddap3DUG_PDIGsjEMM7zEBr6AlRddiEYOkiPQVPYC73B6AOfwtQmxW2lKClXOwKafIIZovubk",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "pistachio-choco",
       name: "Pistachio Choco",
       description: "Warm chocolate with a hint of pistachio",
       price: 52500,
-      image:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuCIwMyv49ZlT01bzwdjTky3VlxorIf82IhK7JuHHFxA9L1G_smbVi9kwFMq_GAgUEUjS3B6HkZRbkkFNHhnINSu3ZLv_39ctY8_DKvEaAF4tw7ikqZEL3HxzdvANei31pbUwdixBUYR6nORdsnvXiFXTtnMQqoi-vEFKkCrk2nGCxebnfZPiUdzvvnWjHDtJBrIxmXtV8r1hT_qUYo8lyWOrT21PSk-na5svcOrj7QUIRFzc_goNX0BE13PumRaXP3nJDjZ3vKhNf8",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
   ],
   "matcha-club": [
@@ -50,28 +86,28 @@ export const PRODUCT_CATALOG = {
       name: "Matcha Latte",
       description: "Creamy matcha flavor with milk",
       price: 50000,
-      image: "/images/products/matcha-latte.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "matcha-frappe",
       name: "Matcha Frappe",
       description: "Blended matcha delight",
       price: 55000,
-      image: "/images/products/matcha-frappe.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "iced-matcha",
       name: "Iced Matcha",
       description: "Refreshing iced matcha",
       price: 52500,
-      image: "/images/products/iced-matcha.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "matcha-cake",
       name: "Matcha Cake",
       description: "Delicious matcha flavored cake",
       price: 45000,
-      image: "/images/products/matcha-cake.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
   ],
   "master-soe-series": [
@@ -80,88 +116,261 @@ export const PRODUCT_CATALOG = {
       name: "Ethiopia Yirgacheffe",
       description: "Fruity and floral notes",
       price: 150000,
-      image: "/images/products/ethiopia-yirgacheffe.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "colombia-supremo",
       name: "Colombia Supremo",
       description: "Rich and nutty flavor",
       price: 120000,
-      image: "/images/products/colombia-supremo.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "kenya-aa",
       name: "Kenya AA",
       description: "Bright and acidic with berry notes",
       price: 135000,
-      image: "/images/products/kenya-aa.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "brazil-santos",
       name: "Brazil Santos",
       description: "Smooth and mild with a nutty flavor",
       price: 110000,
-      image: "/images/products/brazil-santos.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
   ],
   merchandise: [
     {
       id: "spm-cafe-t-shirt",
-      name: "SPM Café T-Shirt",
+      name: "AIVRA T-Shirt",
       description: "High quality cotton t-shirt",
       price: 250000,
-      image: "/images/products/spm-cafe-t-shirt.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "spm-cafe-mug",
-      name: "SPM Café Mug",
-      description: "Ceramic mug with SPM Café logo",
+      name: "AIVRA Mug",
+      description: "Ceramic mug with AIVRA logo",
       price: 150000,
-      image: "/images/products/spm-cafe-mug.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "spm-cafe-tote-bag",
-      name: "SPM Café Tote Bag",
-      description: "Canvas tote bag with SPM Café logo",
+      name: "AIVRA Tote Bag",
+      description: "Canvas tote bag with AIVRA logo",
       price: 200000,
-      image: "/images/products/spm-cafe-tote-bag.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
     {
       id: "spm-cafe-cap",
-      name: "SPM Café Cap",
-      description: "Cotton cap with SPM Café logo",
+      name: "AIVRA Cap",
+      description: "Cotton cap with AIVRA logo",
       price: 180000,
-      image: "/images/products/spm-cafe-cap.jpg",
+      image: PRODUCT_PLACEHOLDER_IMAGE,
     },
   ],
-} satisfies ProductCatalog;
+};
 
-export type CategorySlug = keyof typeof PRODUCT_CATALOG;
+const LEGACY_PRODUCT_ID_MAP: Record<string, string> = {
+  "sample-pistachio-latte": "pistachio-latte",
+  "sample-matcha-frappe": "matcha-frappe",
+  "sample-ethiopia-yirgacheffe": "ethiopia-yirgacheffe",
+};
 
-const nonAllEntries = Object.entries(PRODUCT_CATALOG).filter(
-  ([slug]) => slug !== "all"
+const DEFAULT_ADMIN_PRODUCTS_INTERNAL: AdminProductRecord[] = Object.entries(
+  DEFAULT_PRODUCT_SOURCE
+).flatMap(([category, products]) => {
+  const isMerchandise = category === "merchandise";
+  return products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    category: category as CategorySlug,
+    price: product.price,
+    description: product.description,
+    sku: product.id.toUpperCase().replace(/[^A-Z0-9]+/g, "-"),
+    imageUrl: product.image,
+    highlight: "",
+    isAvailable: true,
+    isFeatured: false,
+    soldOut: false,
+    hotOption: !isMerchandise,
+    icedOption: !isMerchandise,
+    prepTime: "",
+    calories: "0",
+    createdAt: new Date().toISOString(),
+    customizations: [],
+  }));
+});
+
+const DEFAULT_PRODUCT_IMAGE_MAP: Record<string, string> = DEFAULT_ADMIN_PRODUCTS_INTERNAL.reduce(
+  (acc, product) => {
+    acc[product.id] = product.imageUrl;
+    return acc;
+  },
+  {} as Record<string, string>
 );
 
-PRODUCT_CATALOG.all = nonAllEntries
-  .flatMap(([, products]) => products)
-  .filter(
-    (product, index, self) =>
-      self.findIndex((item) => item.id === product.id) === index
+export const DEFAULT_ADMIN_PRODUCTS: AdminProductRecord[] =
+  DEFAULT_ADMIN_PRODUCTS_INTERNAL.map((product) => ({
+    ...product,
+    customizations: product.customizations.map((group) => ({
+      ...group,
+      options: group.options.map((option) => ({ ...option })),
+    })),
+  }));
+
+type BuildCatalogResult = {
+  catalog: ProductCatalog;
+  allProductsWithCategory: Array<{ product: Product; category: CategorySlug }>;
+  lookup: Record<string, CategorySlug>;
+};
+
+function createProductFromAdmin(record: AdminProductRecord): Product {
+  return {
+    id: record.id,
+    name: record.name,
+    description: record.description,
+    price: record.price,
+    image: record.imageUrl,
+  };
+}
+
+function normalizeAdminProduct(record: AdminProductRecord): AdminProductRecord {
+  const normalizedId = LEGACY_PRODUCT_ID_MAP[record.id] ?? record.id;
+  const rawImageUrl = (record.imageUrl ?? "").trim();
+  const needsFallback =
+    !rawImageUrl || rawImageUrl.includes("googleusercontent.com/aida-public");
+  const fallbackImage =
+    DEFAULT_PRODUCT_IMAGE_MAP[normalizedId] ?? "/images/product-placeholder.svg";
+  const normalizedImageUrl = needsFallback ? fallbackImage : rawImageUrl;
+  return {
+    ...record,
+    id: normalizedId,
+    imageUrl: normalizedImageUrl,
+    customizations: Array.isArray(record.customizations)
+      ? record.customizations.map((group) => ({
+          ...group,
+          options: Array.isArray(group.options)
+            ? group.options.map((option) => ({ ...option }))
+            : [],
+        }))
+      : [],
+  };
+}
+
+export function buildProductCatalog(
+  adminProducts: AdminProductRecord[]
+): BuildCatalogResult {
+  const catalog: ProductCatalog = { all: [] };
+  const lookup: Record<string, CategorySlug> = {};
+  const allProductsWithCategory: Array<{ product: Product; category: CategorySlug }> = [];
+
+  adminProducts.forEach((record) => {
+    const category = (record.category || "uncategorized") as CategorySlug;
+    const normalizedId = LEGACY_PRODUCT_ID_MAP[record.id] ?? record.id;
+    const product = createProductFromAdmin({ ...record, id: normalizedId });
+
+    if (!catalog[category]) {
+      catalog[category] = [];
+    }
+    catalog[category].push(product);
+    lookup[product.id] = category;
+    allProductsWithCategory.push({ product, category });
+  });
+
+  const aggregated = new Map<string, Product>();
+  Object.entries(catalog).forEach(([slug, products]) => {
+    if (slug === "all") {
+      return;
+    }
+    products.forEach((product) => {
+      if (!aggregated.has(product.id)) {
+        aggregated.set(product.id, product);
+      }
+    });
+  });
+  catalog.all = Array.from(aggregated.values());
+
+  return { catalog, allProductsWithCategory, lookup };
+}
+
+function safeParseAdminProducts(raw: string | null): AdminProductRecord[] | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as AdminProductRecord[];
+  } catch (error) {
+    console.error("Failed to parse stored admin products", error);
+    return null;
+  }
+}
+
+export function loadAdminProductsFromStorage(): AdminProductRecord[] {
+  if (typeof window === "undefined") {
+    return DEFAULT_ADMIN_PRODUCTS.map((product) => ({ ...product }));
+  }
+  const stored = safeParseAdminProducts(
+    window.localStorage.getItem(PRODUCTS_STORAGE_KEY)
   );
+  if (!stored || stored.length === 0) {
+    return DEFAULT_ADMIN_PRODUCTS.map((product) => ({ ...product }));
+  }
+  return stored.map((product) => normalizeAdminProduct(product));
+}
 
-export const ALL_PRODUCTS_WITH_CATEGORY = nonAllEntries.flatMap(
-  ([category, products]) =>
-    products.map((product) => ({
-      product,
-      category: category as CategorySlug,
-    }))
-);
+export function saveAdminProductsToStorage(products: AdminProductRecord[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+    window.dispatchEvent(new Event(PRODUCTS_EVENT));
+  } catch (error) {
+    console.error("Failed to persist admin products", error);
+  }
+}
 
-export const PRODUCT_CATEGORY_LOOKUP = Object.fromEntries(
-  nonAllEntries.flatMap(([category, products]) =>
-    products.map((product) => [product.id, category])
-  )
-) as Record<string, CategorySlug>;
+const defaultCatalog = buildProductCatalog(DEFAULT_ADMIN_PRODUCTS);
+
+export const PRODUCT_CATALOG = defaultCatalog.catalog;
+export const ALL_PRODUCTS_WITH_CATEGORY = defaultCatalog.allProductsWithCategory;
+export const PRODUCT_CATEGORY_LOOKUP = defaultCatalog.lookup;
+
+export function createCatalogFromAdminProducts(adminProducts: AdminProductRecord[]) {
+  return buildProductCatalog(adminProducts);
+}
+
+function findProductInCatalog(
+  catalog: ProductCatalog,
+  lookup: Record<string, CategorySlug>,
+  productId: string
+) {
+  const category = lookup[productId];
+  if (!category) {
+    return null;
+  }
+  const product = catalog[category]?.find((item) => item.id === productId) ?? null;
+  return product ? { product, category } : null;
+}
+
+export function getProductById(productId: string) {
+  const normalizedId = LEGACY_PRODUCT_ID_MAP[productId] ?? productId;
+  if (typeof window !== "undefined") {
+    const adminProducts = loadAdminProductsFromStorage();
+    const { catalog, lookup } = buildProductCatalog(adminProducts);
+    const match = findProductInCatalog(catalog, lookup, normalizedId);
+    if (match) {
+      return match;
+    }
+  }
+  return findProductInCatalog(PRODUCT_CATALOG, PRODUCT_CATEGORY_LOOKUP, normalizedId);
+}
 
 const currencyFormatter = new Intl.NumberFormat("id-ID", {
   style: "currency",
@@ -171,13 +380,4 @@ const currencyFormatter = new Intl.NumberFormat("id-ID", {
 
 export function formatCurrency(value: number) {
   return currencyFormatter.format(value).replace("Rp", "Rp ");
-}
-
-export function getProductById(productId: string) {
-  const category = PRODUCT_CATEGORY_LOOKUP[productId];
-  if (!category) {
-    return null;
-  }
-  const product = PRODUCT_CATALOG[category].find((item) => item.id === productId) ?? null;
-  return product ? { product, category } : null;
 }

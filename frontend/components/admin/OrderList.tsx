@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo } from "react";
+import type { ReactNode } from "react";
 import { useOrders, type OrderEntry } from "@/lib/orderStore";
 import { formatTableLabel } from "@/lib/tables";
 

@@ -6,7 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
-import { formatCurrency, ALL_PRODUCTS_WITH_CATEGORY } from "@/lib/products";
+import { formatCurrency } from "@/lib/products";
+import { useProductCatalogData } from "@/hooks/useProductCatalog";
 import { categoryToPath } from "@/lib/navigation";
 import { useCart, type PaymentMethodKey } from "@/lib/cartStore";
 import { isCashierCardSlug, isTakeawaySlug } from "@/lib/tables";
@@ -98,6 +99,7 @@ export default function CartPage() {
     paymentMethod,
     setPaymentMethod,
   } = useCart();
+  const { allProductsWithCategory } = useProductCatalogData();
   const isCashierContext =
     pathname?.startsWith("/cashier") ||
     isCashierCardSlug(tableId) ||
@@ -226,7 +228,7 @@ export default function CartPage() {
 
   const recommendations = useMemo(() => {
     const seen = new Set<string>();
-    return ALL_PRODUCTS_WITH_CATEGORY.filter(({ product }) => {
+    return allProductsWithCategory.filter(({ product }) => {
       if (seen.has(product.id)) {
         return false;
       }
@@ -235,7 +237,7 @@ export default function CartPage() {
     })
       .filter(({ product }) => !lines.some((line) => line.productId === product.id))
       .slice(0, 3);
-  }, [lines]);
+  }, [lines, allProductsWithCategory]);
 
   const materialIconRenderer = useCallback(
     (iconName: string) =>

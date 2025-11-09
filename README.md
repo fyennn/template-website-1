@@ -1,6 +1,6 @@
-# SPM Café Frontend
+# AIVRA Frontend
 
-Next.js + TypeScript implementation of the SPM Café catalogue UI. The legacy static HTML/Tailwind assets have been removed; all work now happens inside the `frontend/` app.
+Next.js + TypeScript implementation of the AIVRA catalogue UI. The legacy static HTML/Tailwind assets have been removed; all work now happens inside the `frontend/` app.
 
 ## Getting Started
 
@@ -21,5 +21,4 @@ npm run dev       # start local dev server (default http://127.0.0.1:3000)
 - `frontend/app/` – Next.js App Router pages and layout
 - `frontend/components/` – UI building blocks (sidebar, product cards, shell, etc.)
 - `frontend/lib/` – catalogue data and navigation helpers
-- `frontend/public/images/products/` – product imagery
-
+- `frontend/public/images/product-placeholder.svg` – shared placeholder used when no product image is supplied

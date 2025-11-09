@@ -1,9 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
 import type { CategorySlug } from "@/lib/products";
-import { PRODUCT_CATALOG } from "@/lib/products";
 import { NAVIGATION } from "@/lib/navigation";
+import { useProductCatalogData } from "@/hooks/useProductCatalog";
 
 export type CategoryPageProps = {
   categorySlug: CategorySlug;
@@ -13,6 +15,7 @@ const gridClassName =
   "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
 
 export function CategoryPage({ categorySlug }: CategoryPageProps) {
+  const { catalog } = useProductCatalogData();
   if (categorySlug === "all") {
     const navigableCategories = NAVIGATION.filter((item) => item.slug !== "all");
 
@@ -20,7 +23,7 @@ export function CategoryPage({ categorySlug }: CategoryPageProps) {
       <AppShell activeSlug={categorySlug}>
         <div className="space-y-10 p-4 pb-24">
           {navigableCategories.map((navItem) => {
-            const categoryProducts = PRODUCT_CATALOG[navItem.slug] ?? [];
+            const categoryProducts = catalog[navItem.slug] ?? [];
             if (categoryProducts.length === 0) {
               return null;
             }
@@ -56,7 +59,7 @@ export function CategoryPage({ categorySlug }: CategoryPageProps) {
     );
   }
 
-  const products = PRODUCT_CATALOG[categorySlug] ?? [];
+  const products = catalog[categorySlug] ?? [];
 
   return (
     <AppShell activeSlug={categorySlug}>

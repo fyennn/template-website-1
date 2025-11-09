@@ -1,0 +1,14 @@
+<svg width="640" height="800" viewBox="0 0 640 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Product placeholder">
+  <defs>
+    <linearGradient id="g" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#d1fae5" />
+      <stop offset="100%" stop-color="#e0e7ff" />
+    </linearGradient>
+  </defs>
+  <rect width="640" height="800" fill="url(#g)" rx="48" />
+  <g fill="#0f172a" opacity="0.25">
+    <circle cx="160" cy="240" r="64" />
+    <circle cx="480" cy="320" r="80" />
+    <path d="M120 640c48-96 128-160 200-160s152 64 200 160H120z" />
+  </g>
+</svg>

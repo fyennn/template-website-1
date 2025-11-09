@@ -12,8 +12,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SPM Café",
-  description: "Menu katalog SPM Café",
+  title: "AIVRA",
+  description: "Menu katalog AIVRA",
 };
 
 export default function RootLayout({

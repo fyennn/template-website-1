@@ -61,7 +61,7 @@ export function Header({
       ) : (
         <div className="flex items-center md:hidden enter-animated enter-from-left enter-duration-short">
           <Image
-            alt="SPM Café Logo"
+            alt="AIVRA Logo"
             className="h-8 w-auto mr-4"
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuAyZ62jeX9qRYhWVarbUUcWcQXIm6Iqvp05IVSHRXMYw1cvDCAvM6Xv4wYgprgj56F9T1nii4qBOVxkAUCCxqfAZTWfkE-akpReVEqmDOGhSfCh7va2_uXvDyj4v3XDGyvvfZD6aF4uCe0sVI8B1jwqKnXaVYTy36mRdgSHJrmyR_tSO6xRBoLbIn202gydshDq9Npx9PId30JOUs86Q_hMfRSEy5nLCuEaFgM6JlcCecyGxxqkV_9GHqUbLli3fRUbdQNc2t2EMeM"
             width={128}
@@ -89,7 +89,7 @@ export function Header({
           ) : null}
           <div className={hideLocation ? "ml-0" : ""}>
             <p className="text-xs text-gray-500">Pick up di store</p>
-            <p className="text-sm font-bold text-gray-800">SPM Café - Menteng</p>
+            <p className="text-sm font-bold text-gray-800">AIVRA - Menteng</p>
           </div>
         </div>
       )}
@@ -105,7 +105,7 @@ export function Header({
           ) : null}
           <div className="text-right">
             <p className="text-xs text-gray-500">Pick up di store</p>
-            <p className="text-sm font-bold text-gray-800">SPM Café - Menteng</p>
+            <p className="text-sm font-bold text-gray-800">AIVRA - Menteng</p>
           </div>
         </div>
       ) : (

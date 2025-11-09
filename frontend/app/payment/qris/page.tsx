@@ -64,7 +64,7 @@ export default function QrisPaymentPage() {
 
   const qrReference = useMemo(() => {
     const total = summary.totalLabel.replace(/\D/g, "");
-    return `SPM-${total.slice(-6).padStart(6, "0")}`;
+    return `AIVRA-${total.slice(-6).padStart(6, "0")}`;
   }, [summary.totalLabel]);
 
   const handleDownloadQr = useCallback(() => {

@@ -1,0 +1,37 @@
+<svg width="180" height="60" viewBox="0 0 180 60" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="aivra-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f5bd5"/>
+      <stop offset="50%" stop-color="#6f7bf7"/>
+      <stop offset="100%" stop-color="#7ddde0"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" fill-rule="evenodd">
+    <path
+      d="M32 50L54 10l22 40"
+      stroke="url(#aivra-stroke)"
+      stroke-width="8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="54" cy="10" r="6" fill="#1c2d64"/>
+    <circle cx="32" cy="50" r="5" fill="#4f5bd5"/>
+    <circle cx="76" cy="50" r="5" fill="#7ddde0"/>
+    <path
+      d="M35 43c10-7 21-10 32-9"
+      stroke="#aac8ff"
+      stroke-width="3"
+      stroke-linecap="round"
+    />
+    <text
+      x="100"
+      y="40"
+      font-family="Inter, 'Segoe UI', sans-serif"
+      font-size="28"
+      font-weight="500"
+      fill="#4b5165"
+    >
+      Aivra
+    </text>
+  </g>
+</svg>

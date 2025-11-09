@@ -18,7 +18,7 @@ export function Sidebar({ items, activeSlug }: SidebarProps) {
         <div className="px-6 pb-4 pt-6 border-b border-emerald-100/60 bg-white/80 backdrop-blur">
           <Image
             src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsiHIdLAZymKywmghuMJ4DnMud2B6E1CzythChBRnHHYVHHbyl717uDSqWpl530JlSId2MxEhHz78ptp-CAGshOvKKeU9yud3F4M4aQ6eGYrrGAfZBnIse5F98soktjbyVpPmo_QeNCMUndjKVj8Tc4qNpY6Fd3XEJkiMJCiMi9BbOHNbuJvjmD_ePxe-FZuGXvShGRktUkdCK47mqzUCgo_fSHO3Kfbnef25GdcamaiYNuBKN1iyAT8Nv7P_0pTtXbuLOcKV1ObM"
-            alt="SPM Café Logo"
+            alt="AIVRA Logo"
             className="h-10 w-auto enter-animated enter-from-left enter-duration-short"
             data-animate-delay="40"
             width={160}
